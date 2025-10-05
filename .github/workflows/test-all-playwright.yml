@@ -79,9 +79,9 @@ jobs:
       run: |
         pip install --upgrade pip setuptools wheel
         
-        # Install all Playwright libraries
+        # Install all Playwright libraries with FIXED versions
         echo "=== Installing Playwright Libraries ==="
-        pip install playwright playwright-stealth==2.0.0 patchright 'camoufox[geoip]'
+        pip install playwright playwright-stealth==1.0.6 patchright 'camoufox[geoip]'
         
         # Install Playwright browsers
         playwright install chromium firefox
@@ -90,15 +90,50 @@ jobs:
         # Install Patchright browser
         patchright install chromium || echo "⚠️ Patchright install warning (continuing)"
         
-        # Verify installations
+        # Verify installations with CORRECT imports
         echo ""
         echo "=== Verifying Installations ==="
         python -c "import playwright; print('✅ Playwright')"
-        python -c "from playwright_stealth import StealthConfig; print('✅ Playwright-stealth 2.0')" || echo "⚠️ Playwright-stealth import failed"
+        python -c "from playwright_stealth import stealth_async; print('✅ Playwright-stealth v1.0.6')" || {
+          echo "❌ Playwright-stealth v1.0.6 import failed!"
+          echo "Installed version:"
+          pip show playwright-stealth
+          exit 1
+        }
         python -c "import patchright; print('✅ Patchright')"
-        python -c "import camoufox; print('✅ Camoufox')"
+        python -c "import camoufox; print('✅ Camoufox with geoip')"
+    
+    # ADDED: Comprehensive browser verification
+    - name: ✅ Verify Browser Installations
+      run: |
+        echo "=== Browser Verification ==="
         
-    - name: ✅ Verify Installations
+        # Test Chromium
+        python -c "
+from playwright.sync_api import sync_playwright
+p = sync_playwright().start()
+browser = p.chromium.launch()
+print('✅ Chromium functional')
+browser.close()
+p.stop()
+        " || {
+          echo "❌ Chromium verification failed!"
+          exit 1
+        }
+        
+        # Test Firefox
+        python -c "
+from playwright.sync_api import sync_playwright
+p = sync_playwright().start()
+browser = p.firefox.launch()
+print('✅ Firefox functional')
+browser.close()
+p.stop()
+        " || {
+          echo "⚠️ Firefox verification failed (continuing)"
+        }
+        
+    - name: ✅ Validate Installation Versions
       run: |
         echo "=== Installation Verification ==="
         echo ""
@@ -142,6 +177,12 @@ jobs:
         echo "=== Test Results ==="
         echo "Screenshots:"
         ls -lh test_results/screenshots/ 2>/dev/null | tail -n 30 || echo "No screenshots"
+        echo ""
+        echo "Screenshot count by library:"
+        for lib in playwright playwright-stealth patchright camoufox; do
+          COUNT=$(ls test_results/screenshots/${lib}* 2>/dev/null | wc -l)
+          echo "  $lib: $COUNT screenshots"
+        done
         echo ""
         echo "Reports:"
         ls -lh test_results/reports/ 2>/dev/null | tail -n 10 || echo "No reports"
