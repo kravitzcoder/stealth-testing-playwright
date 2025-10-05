@@ -1,0 +1,27 @@
+# Playwright Stealth Testing Framework - Python Dependencies
+
+# Core Playwright Libraries
+playwright>=1.40.0
+playwright-stealth>=1.0.6
+patchright>=1.0.0
+camoufox>=0.3.0
+
+# Async utilities
+asyncio-throttle>=1.0.2
+aiohttp>=3.9.0
+
+# Data handling and parsing
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+
+# Image processing
+Pillow>=10.0.0
+
+# Logging and utilities
+colorlog>=6.7.0
+python-dotenv>=1.0.0
+pathlib2>=2.3.7
+
+# Optional: Data analysis (if needed)
+# pandas>=2.1.0
+# numpy>=1.24.0
