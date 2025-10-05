@@ -1,0 +1,77 @@
+{
+  "test_targets": {
+    "fingerprint_check": {
+      "url": "https://pixelscan.net/fingerprint-check",
+      "name": "fingerprint_check",
+      "description": "Browser fingerprinting analysis",
+      "expected_load_time": 30,
+      "detection_methods": ["canvas", "webgl", "fonts", "audio"]
+    },
+    "ip_check": {
+      "url": "https://pixelscan.net/ip",
+      "name": "ip_check", 
+      "description": "IP address detection and proxy effectiveness",
+      "expected_load_time": 15,
+      "detection_methods": ["ip_leak", "proxy_detection"]
+    },
+    "bot_check": {
+      "url": "https://pixelscan.net/bot-check",
+      "name": "bot_check",
+      "description": "Bot detection testing",
+      "expected_load_time": 25,
+      "detection_methods": ["automation_signatures", "behavior_analysis"]
+    },
+    "creepjs_workers": {
+      "url": "https://abrahamjuliot.github.io/creepjs/tests/workers.html",
+      "name": "creepjs_workers",
+      "description": "WebWorker fingerprinting analysis", 
+      "expected_load_time": 35,
+      "detection_methods": ["worker_fingerprinting", "javascript_analysis"]
+    },
+    "creepjs_main": {
+      "url": "https://abrahamjuliot.github.io/creepjs",
+      "name": "creepjs_main",
+      "description": "Comprehensive fingerprint analysis",
+      "expected_load_time": 40,
+      "detection_methods": ["comprehensive_fingerprinting", "100_detection_vectors"]
+    }
+  },
+  "mobile_configurations": {
+    "iphone_x": {
+      "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "device_scale_factor": 3,
+      "is_mobile": true,
+      "has_touch": true
+    },
+    "iphone_12": {
+      "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "device_scale_factor": 3,
+      "is_mobile": true,
+      "has_touch": true
+    },
+    "samsung_galaxy": {
+      "user_agent": "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36",
+      "viewport": {
+        "width": 360,
+        "height": 800
+      },
+      "device_scale_factor": 3,
+      "is_mobile": true,
+      "has_touch": true
+    }
+  },
+  "wait_configuration": {
+    "default_wait_time": 30,
+    "min_wait_time": 15,
+    "max_wait_time": 60,
+    "screenshot_delay": 2
+  }
+}

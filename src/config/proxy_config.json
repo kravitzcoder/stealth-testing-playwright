@@ -1,0 +1,40 @@
+{
+  "proxy_configurations": {
+    "development": {
+      "host": "127.0.0.1",
+      "port": "8080",
+      "username": "",
+      "password": "",
+      "protocol": "http"
+    },
+    "production": {
+      "host": "env:PROXY_HOST",
+      "port": "env:PROXY_PORT", 
+      "username": "env:PROXY_USERNAME",
+      "password": "env:PROXY_PASSWORD",
+      "protocol": "http"
+    }
+  },
+  "proxy_validation": {
+    "test_urls": [
+      "https://httpbin.org/ip",
+      "https://api.ipify.org?format=json"
+    ],
+    "timeout_seconds": 10,
+    "retry_attempts": 3
+  },
+  "authentication_methods": {
+    "basic_auth": {
+      "supported_libraries": ["selenium-wire", "playwright", "botasaurus"],
+      "format": "username:password"
+    },
+    "proxy_extension": {
+      "supported_libraries": ["undetected-chromedriver", "selenium-stealth"],
+      "requires_extension": true
+    },
+    "manual_config": {
+      "supported_libraries": ["nodriver", "selenium-driverless", "helium"],
+      "requires_manual_setup": true
+    }
+  }
+}
