@@ -1,0 +1,201 @@
+name: 🎯 Single Library Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      library:
+        description: 'Playwright library to test'
+        required: true
+        type: choice
+        options:
+          - playwright
+          - playwright_stealth
+          - patchright
+          - camoufox
+      device:
+        description: 'Mobile device to emulate'
+        required: false
+        default: 'iphone_x'
+        type: choice
+        options:
+          - iphone_x
+          - iphone_12
+          - samsung_galaxy
+
+env:
+  PROXY_HOST: ${{ secrets.PROXY_HOST }}
+  PROXY_PORT: ${{ secrets.PROXY_PORT }}
+  PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+  PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+  CAMOUFOX_SKIP_AUTO_UPDATE: true
+  NO_GITHUB_API: true
+
+jobs:
+  test-playwright-library:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+    - name: 📄 Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: 🔧 Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          chromium-browser \
+          firefox \
+          xvfb \
+          libgtk-3-0 \
+          libnotify-dev \
+          libnss3 \
+          libxss1 \
+          libasound2t64 \
+          libxtst6 \
+          xauth \
+          libgbm1
+        
+        # Verify Chrome
+        echo "Chrome binary check:"
+        which chromium-browser || which chromium || which google-chrome || echo "Chrome not in PATH"
+        
+    - name: 📦 Install Base Dependencies
+      run: |
+        pip install --upgrade pip setuptools wheel
+        pip install playwright aiohttp asyncio-throttle beautifulsoup4
+        echo "✅ Base dependencies installed"
+        
+    - name: 📦 Install Library-Specific Dependencies
+      run: |
+        echo "Installing dependencies for: ${{ inputs.library }}"
+        
+        case "${{ inputs.library }}" in
+          "playwright")
+            pip install playwright
+            playwright install chromium
+            playwright install-deps chromium
+            python -c "import playwright; print('✅ Playwright verified')"
+            ;;
+            
+          "playwright_stealth")
+            pip install playwright playwright-stealth==2.0.0
+            playwright install chromium
+            playwright install-deps chromium
+            # Verify stealth plugin
+            python -c "from playwright_stealth import StealthConfig; print('✅ Playwright-stealth 2.0 verified')" || {
+              echo "❌ playwright-stealth import failed!"
+              exit 1
+            }
+            ;;
+            
+          "patchright")
+            pip install patchright
+            patchright install chromium || echo "⚠️ Patchright install returned non-zero, continuing..."
+            python -c "import patchright; print('✅ Patchright verified')"
+            ;;
+            
+          "camoufox")
+            pip install 'camoufox[geoip]'
+            python -c "import camoufox; print('✅ Camoufox verified')"
+            ;;
+            
+          *)
+            echo "❌ Unknown library: ${{ inputs.library }}"
+            exit 1
+            ;;
+        esac
+        
+        echo "✅ Library-specific dependencies installed"
+        
+    - name: 📂 Create Required Directories
+      run: |
+        mkdir -p test_results/screenshots
+        mkdir -p test_results/reports
+        chmod -R 755 test_results
+        ls -la test_results/
+        
+    - name: ✅ Validate Proxy Configuration
+      run: |
+        if [ -z "$PROXY_HOST" ] || [ -z "$PROXY_PORT" ]; then
+          echo "❌ Proxy configuration missing!"
+          echo "Please set PROXY_HOST and PROXY_PORT secrets in repository settings"
+          exit 1
+        fi
+        
+        echo "✅ Proxy configured: $PROXY_HOST:$PROXY_PORT"
+        
+    - name: 🎯 Run Single Library Test
+      run: |
+        export DISPLAY=:99
+        
+        python main.py \
+          --proxy env: \
+          --library "${{ inputs.library }}" \
+          --device "${{ inputs.device }}" \
+          --output-prefix "single_${{ inputs.library }}" \
+          --verbose
+          
+    - name: 📸 Verify Results
+      if: always()
+      run: |
+        echo "=== Test Results Verification ==="
+        echo ""
+        echo "Screenshots:"
+        if [ -d "test_results/screenshots" ]; then
+          ls -lh test_results/screenshots/ | tail -n 20
+          SCREENSHOT_COUNT=$(ls test_results/screenshots/*.png 2>/dev/null | wc -l)
+          echo "Total screenshots: $SCREENSHOT_COUNT"
+        else
+          echo "❌ No screenshots directory"
+        fi
+        
+        echo ""
+        echo "Reports:"
+        if [ -d "test_results/reports" ]; then
+          ls -lh test_results/reports/ | tail -n 20
+          REPORT_COUNT=$(ls test_results/reports/*.json 2>/dev/null | wc -l)
+          echo "Total reports: $REPORT_COUNT"
+        else
+          echo "❌ No reports directory"
+        fi
+        
+    - name: 📸 Upload Screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: screenshots-${{ inputs.library }}-${{ github.run_number }}
+        path: test_results/screenshots/
+        retention-days: 7
+        if-no-files-found: warn
+        
+    - name: 📊 Upload Test Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: reports-${{ inputs.library }}-${{ github.run_number }}
+        path: test_results/reports/
+        retention-days: 30
+        if-no-files-found: warn
+        
+    - name: 📋 Test Results Summary
+      if: always()
+      run: |
+        echo "## 🎯 Playwright Library Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Library:** ${{ inputs.library }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Device:** ${{ inputs.device }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Run:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Add markdown summary if available
+        if [ -f test_results/reports/*_summary.md ]; then
+          echo "### Test Summary" >> $GITHUB_STEP_SUMMARY
+          cat test_results/reports/*_summary.md >> $GITHUB_STEP_SUMMARY
+        fi
