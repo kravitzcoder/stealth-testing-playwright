@@ -32,9 +32,6 @@ class StealthTestOrchestrator:
         
         # Initialize all runners with screenshot engine
         self.playwright_runner = PlaywrightRunner(self.screenshot_engine)
-        self.selenium_runner = SeleniumRunner(self.screenshot_engine) 
-        self.specialized_runner = SpecializedRunner(self.screenshot_engine)
-        self.puppeteer_runner = PuppeteerRunner()
         
         # Load configurations
         self.library_matrix = self._load_library_matrix()
@@ -103,10 +100,7 @@ class StealthTestOrchestrator:
     def _get_runner_for_category(self, category: str):
         """Get the appropriate runner for a category"""
         category_mapping = {
-            "playwright": self.playwright_runner,
-            "selenium": self.selenium_runner,
-            "specialized": self.specialized_runner,
-            "puppeteer": self.puppeteer_runner
+            "playwright": self.playwright_runner
         }
         
         runner = category_mapping.get(category)
