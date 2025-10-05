@@ -14,7 +14,7 @@ from pathlib import Path
 import logging
 
 # Import category runners
-from ..categories.playwright_runner import PlaywrightRunner
+from ..runners.playwright_runner import PlaywrightRunner
 from ..categories.selenium_runner import SeleniumRunner
 from ..categories.specialized_runner import SpecializedRunner
 from ..categories.puppeteer_runner import PuppeteerRunner
