@@ -1,10 +1,10 @@
-# Playwright Stealth Testing Framework - Python Dependencies
+# Playwright Stealth Testing Framework - Python Dependencies (FIXED)
 
 # Core Playwright Libraries
 playwright>=1.40.0
-playwright-stealth>=1.0.6
+playwright-stealth==1.0.6  # FIXED: Pinned to v1.0.6 for stealth_async support
 patchright>=1.0.0
-camoufox>=0.3.0
+camoufox[geoip]>=0.3.0  # FIXED: Added geoip support
 
 # Async utilities
 asyncio-throttle>=1.0.2
@@ -21,7 +21,3 @@ Pillow>=10.0.0
 colorlog>=6.7.0
 python-dotenv>=1.0.0
 pathlib2>=2.3.7
-
-# Optional: Data analysis (if needed)
-# pandas>=2.1.0
-# numpy>=1.24.0
