@@ -83,11 +83,9 @@ jobs:
             ;;
             
           "playwright_stealth")
-            # FIXED: Install v1.0.6 for stealth_async support
             pip install playwright playwright-stealth==1.0.6
             playwright install chromium
             playwright install-deps chromium
-            # FIXED: Verify with correct v1.0.6 import
             python -c "from playwright_stealth import stealth_async; print('✅ Playwright-stealth v1.0.6 verified')" || {
               echo "❌ playwright-stealth import failed!"
               exit 1
@@ -101,7 +99,6 @@ jobs:
             ;;
             
           "camoufox")
-            # FIXED: Install with geoip support
             pip install 'camoufox[geoip]'
             python -c "import camoufox; print('✅ Camoufox verified')"
             ;;
@@ -114,21 +111,13 @@ jobs:
         
         echo "✅ Library-specific dependencies installed"
     
-    # ADDED: Browser verification step
     - name: ✅ Verify Browser Installation
       run: |
         echo "=== Browser Verification ==="
         
         case "${{ inputs.library }}" in
           "playwright"|"playwright_stealth"|"patchright")
-            python -c "
-from playwright.sync_api import sync_playwright
-p = sync_playwright().start()
-browser = p.chromium.launch()
-print('✅ Chromium browser functional')
-browser.close()
-p.stop()
-            " || {
+            python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); print('✅ Chromium browser functional'); browser.close(); p.stop()" || {
               echo "❌ Browser verification failed!"
               exit 1
             }
@@ -177,16 +166,6 @@ p.stop()
           ls -lh test_results/screenshots/ | tail -n 20
           SCREENSHOT_COUNT=$(ls test_results/screenshots/*.png 2>/dev/null | wc -l)
           echo "Total screenshots: $SCREENSHOT_COUNT"
-          
-          # Check for empty screenshots
-          for img in test_results/screenshots/*.png; do
-            if [ -f "$img" ]; then
-              SIZE=$(stat -f%z "$img" 2>/dev/null || stat -c%s "$img" 2>/dev/null)
-              if [ "$SIZE" -lt 1000 ]; then
-                echo "⚠️ Warning: $img is suspiciously small ($SIZE bytes)"
-              fi
-            fi
-          done
         else
           echo "❌ No screenshots directory"
         fi
@@ -230,7 +209,6 @@ p.stop()
         echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
-        # Add markdown summary if available
         if [ -f test_results/reports/*_summary.md ]; then
           echo "### Test Summary" >> $GITHUB_STEP_SUMMARY
           cat test_results/reports/*_summary.md >> $GITHUB_STEP_SUMMARY
