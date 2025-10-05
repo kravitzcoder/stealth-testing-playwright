@@ -1,0 +1,181 @@
+name: 🎭 Test All Playwright Libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: 'Mobile device to emulate'
+        required: false
+        default: 'iphone_x'
+        type: choice
+        options:
+          - iphone_x
+          - iphone_12
+          - samsung_galaxy
+      mode:
+        description: 'Test execution mode'
+        required: false
+        default: 'sequential'
+        type: choice
+        options:
+          - sequential
+          - parallel
+
+env:
+  PROXY_HOST: ${{ secrets.PROXY_HOST }}
+  PROXY_PORT: ${{ secrets.PROXY_PORT }}
+  PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+  PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+  CAMOUFOX_SKIP_AUTO_UPDATE: true
+  NO_GITHUB_API: true
+
+jobs:
+  test-all-playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
+    steps:
+    - name: 📄 Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: 🔧 Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          xvfb \
+          libgtk-3-0 \
+          libnotify-dev \
+          libnss3 \
+          libxss1 \
+          libasound2t64 \
+          libxtst6 \
+          xauth \
+          libgbm1 \
+          libxkbcommon0 \
+          libxrandr2 \
+          libxcomposite1 \
+          libxdamage1 \
+          libatk-bridge2.0-0 \
+          libpango-1.0-0 \
+          libcairo2 \
+          libatspi2.0-0 \
+          chromium-browser \
+          firefox \
+          wget
+        
+        # Verify browsers
+        echo "Chrome binary check:"
+        which chromium-browser || which chromium || which google-chrome || echo "Chrome not in PATH"
+        echo "Firefox binary check:"
+        which firefox || echo "Firefox not in PATH"
+        
+    - name: 📦 Install All Playwright Dependencies
+      run: |
+        pip install --upgrade pip setuptools wheel
+        
+        # Install all Playwright libraries
+        echo "=== Installing Playwright Libraries ==="
+        pip install playwright playwright-stealth==2.0.0 patchright 'camoufox[geoip]'
+        
+        # Install Playwright browsers
+        playwright install chromium firefox
+        playwright install-deps chromium firefox
+        
+        # Install Patchright browser
+        patchright install chromium || echo "⚠️ Patchright install warning (continuing)"
+        
+        # Verify installations
+        echo ""
+        echo "=== Verifying Installations ==="
+        python -c "import playwright; print('✅ Playwright')"
+        python -c "from playwright_stealth import StealthConfig; print('✅ Playwright-stealth 2.0')" || echo "⚠️ Playwright-stealth import failed"
+        python -c "import patchright; print('✅ Patchright')"
+        python -c "import camoufox; print('✅ Camoufox')"
+        
+    - name: ✅ Verify Installations
+      run: |
+        echo "=== Installation Verification ==="
+        echo ""
+        echo "Python packages:"
+        pip list | grep -E "playwright|patchright|camoufox"
+        echo ""
+        echo "Playwright browsers:"
+        playwright install --list || true
+        
+    - name: ✅ Validate Proxy Configuration
+      run: |
+        if [ -z "$PROXY_HOST" ] || [ -z "$PROXY_PORT" ]; then
+          echo "❌ Proxy configuration missing!"
+          echo "Please set PROXY_HOST and PROXY_PORT secrets"
+          exit 1
+        fi
+        
+        echo "✅ Proxy configured: $PROXY_HOST:$PROXY_PORT"
+        
+    - name: 📂 Create Required Directories
+      run: |
+        mkdir -p test_results/screenshots
+        mkdir -p test_results/reports
+        chmod -R 755 test_results
+        
+    - name: 🎭 Run All Playwright Tests
+      run: |
+        export DISPLAY=:99
+        
+        python main.py \
+          --proxy env: \
+          --all \
+          --device "${{ inputs.device }}" \
+          --mode "${{ inputs.mode }}" \
+          --output-prefix "all_playwright" \
+          --verbose
+          
+    - name: 📸 Verify Results
+      if: always()
+      run: |
+        echo "=== Test Results ==="
+        echo "Screenshots:"
+        ls -lh test_results/screenshots/ 2>/dev/null | tail -n 30 || echo "No screenshots"
+        echo ""
+        echo "Reports:"
+        ls -lh test_results/reports/ 2>/dev/null | tail -n 10 || echo "No reports"
+        
+    - name: 📸 Upload Screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: screenshots-all-playwright-${{ github.run_number }}
+        path: test_results/screenshots/
+        retention-days: 7
+        if-no-files-found: warn
+        
+    - name: 📊 Upload Test Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: reports-all-playwright-${{ github.run_number }}
+        path: test_results/reports/
+        retention-days: 30
+        if-no-files-found: warn
+        
+    - name: 📋 Test Results Summary
+      if: always()
+      run: |
+        echo "## 🎭 All Playwright Libraries Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Device:** ${{ inputs.device }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Mode:** ${{ inputs.mode }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Run:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f test_results/reports/*_summary.md ]; then
+          echo "### Detailed Results" >> $GITHUB_STEP_SUMMARY
+          cat test_results/reports/*_summary.md >> $GITHUB_STEP_SUMMARY
+        fi
