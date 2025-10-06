@@ -861,17 +861,33 @@ class PlaywrightRunner:
             )
     
     async def _extract_ip_from_page(self, page) -> Optional[str]:
-        """Extract IP address from page"""
+        """Extract IP address from page with pixelscan.net specific handling"""
         try:
-            await page.wait_for_selector('text=/\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/', timeout=5000)
+            # Wait for page to load with IP
+            await asyncio.sleep(2)
             
+            # Strategy 1: Look for "Your IP:" text pattern (pixelscan.net specific)
+            try:
+                page_text = await page.evaluate('document.body.innerText')
+                
+                # Match "Your IP: XXX.XXX.XXX.XXX" pattern
+                ip_pattern = r'Your IP[:\s]+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
+                match = re.search(ip_pattern, page_text, re.IGNORECASE)
+                if match:
+                    detected_ip = match.group(1)
+                    logger.info(f"✅ Found IP via 'Your IP:' pattern: {detected_ip}")
+                    return detected_ip
+            except Exception as e:
+                logger.debug(f"Pattern search failed: {e}")
+            
+            # Strategy 2: Try specific selectors for pixelscan.net
             selectors = [
+                'text=/Your IP:/',  # Playwright text selector
+                'div:has-text("Your IP")',  # Contains "Your IP"
                 'div.ip-address',
                 'span.ip',
                 'code',
-                'pre',
-                'div[class*="ip"]',
-                'span[class*="address"]'
+                'pre'
             ]
             
             for selector in selectors:
@@ -879,35 +895,39 @@ class PlaywrightRunner:
                     element = await page.query_selector(selector)
                     if element:
                         text = await element.inner_text()
-                        ip_match = re.search(r'\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\b', text)
+                        ip_match = re.search(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', text)
                         if ip_match:
                             detected_ip = ip_match.group(1)
-                            logger.info(f"Found IP via selector '{selector}': {detected_ip}")
+                            logger.info(f"✅ Found IP via selector '{selector}': {detected_ip}")
                             return detected_ip
-                except:
+                except Exception as e:
+                    logger.debug(f"Selector {selector} failed: {e}")
                     continue
             
+            # Strategy 3: Find all IPs in page and filter
             page_content = await page.content()
-            all_ips = re.findall(r'\\b(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\\b', page_content)
+            all_ips = re.findall(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', page_content)
             
             if all_ips:
+                # Filter out private/reserved IPs
                 public_ips = [
                     ip for ip in all_ips 
                     if not ip.startswith(('127.', '192.168.', '10.', '172.16.', '172.17.', 
                                          '172.18.', '172.19.', '172.20.', '172.21.', 
                                          '172.22.', '172.23.', '172.24.', '172.25.',
                                          '172.26.', '172.27.', '172.28.', '172.29.',
-                                         '172.30.', '172.31.', '0.0.0.0'))
+                                         '172.30.', '172.31.', '0.0.0.0', '255.255.'))
                 ]
                 
                 if public_ips:
                     detected_ip = public_ips[0]
-                    logger.info(f"Found IP via content search: {detected_ip}")
+                    logger.info(f"✅ Found IP via content search: {detected_ip}")
                     return detected_ip
                     
         except Exception as e:
-            logger.warning(f"IP extraction failed: {e}")
+            logger.warning(f"⚠️ IP extraction failed: {e}")
         
+        logger.warning("⚠️ No IP detected on page")
         return None
     
     async def _extract_detection_data(self, page, url: str):
