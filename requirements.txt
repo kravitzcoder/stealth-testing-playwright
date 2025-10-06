@@ -2,7 +2,8 @@
 
 # Core Playwright Libraries
 playwright>=1.40.0
-playwright-stealth==1.0.6  # FIXED: Pinned to v1.0.6 for stealth_async support
+# playwright-stealth REMOVED - buggy v1.0.6 breaks page JavaScript with undefined 'opts'
+# Manual spoofing is more comprehensive anyway
 patchright>=1.0.0
 camoufox[geoip]>=0.3.0  # FIXED: Added geoip support
 
