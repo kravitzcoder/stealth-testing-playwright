@@ -81,7 +81,8 @@ jobs:
         
         # Install all Playwright libraries with FIXED versions
         echo "=== Installing Playwright Libraries ==="
-        pip install playwright playwright-stealth==1.0.6 patchright 'camoufox[geoip]'
+        # REMOVED: playwright-stealth (buggy, breaks page JS with undefined 'opts')
+        pip install playwright patchright 'camoufox[geoip]'
         
         # Install Playwright browsers
         playwright install chromium firefox
@@ -90,16 +91,10 @@ jobs:
         # Install Patchright browser
         patchright install chromium || echo "⚠️ Patchright install warning (continuing)"
         
-        # Verify installations with CORRECT imports
+        # Verify installations (no more playwright-stealth check)
         echo ""
         echo "=== Verifying Installations ==="
-        python -c "import playwright; print('✅ Playwright')"
-        python -c "from playwright_stealth import stealth_async; print('✅ Playwright-stealth v1.0.6')" || {
-          echo "❌ Playwright-stealth v1.0.6 import failed!"
-          echo "Installed version:"
-          pip show playwright-stealth
-          exit 1
-        }
+        python -c "import playwright; print('✅ Playwright (manual stealth only)')"
         python -c "import patchright; print('✅ Patchright')"
         python -c "import camoufox; print('✅ Camoufox with geoip')"
     
