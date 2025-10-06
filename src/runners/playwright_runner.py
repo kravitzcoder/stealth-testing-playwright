@@ -36,14 +36,12 @@ class PlaywrightRunner:
         self.stealth_available = self._verify_stealth_plugin()
     
     def _verify_stealth_plugin(self) -> bool:
-        """Verify playwright-stealth v1.0.6"""
-        try:
-            from playwright_stealth import stealth_async
-            logger.info("✅ playwright-stealth v1.0.6 available (stealth_async)")
-            return True
-        except ImportError as e:
-            logger.warning(f"⚠️ playwright-stealth NOT available: {e}")
-            return False
+        """Verify playwright-stealth v1.0.6 - DISABLED due to bugs"""
+        # DISABLED: playwright-stealth v1.0.6 has a bug where it injects code with undefined 'opts' variable
+        # This breaks page JavaScript and prevents data extraction
+        # Our manual spoofing is more comprehensive anyway
+        logger.info("ℹ️ playwright-stealth plugin DISABLED (using manual spoofing only)")
+        return False
     
     def _get_worker_injection_code(self, mobile_config: Dict[str, Any]) -> str:
         """Generate worker injection code"""
@@ -246,15 +244,11 @@ class PlaywrightRunner:
         await page.route('**/*', handle_route)
         logger.info("✅ Route-based worker interception enabled")
         
-        if self.stealth_available:
-            try:
-                from playwright_stealth import stealth_async
-                await stealth_async(page)
-                logger.info("✅ Playwright-stealth v1.0.6 applied")
-            except Exception as e:
-                logger.warning(f"⚠️ Playwright-stealth failed: {e}")
+        # REMOVED: playwright-stealth plugin disabled due to bugs
+        # The plugin injects code with undefined 'opts' variable which breaks page JavaScript
+        # Our manual spoofing above is more comprehensive and doesn't break pages
         
-        logger.info("✅ Enhanced stealth fully applied")
+        logger.info("✅ Enhanced stealth fully applied (manual spoofing only)")
     
     async def run_test(
         self, 
@@ -361,7 +355,11 @@ class PlaywrightRunner:
                     proxy_working=self._check_proxy_working(detected_ip, proxy_config),
                     screenshot_path=screenshot_path,
                     execution_time=time.time() - start_time,
-                    additional_data={'worker_spoofing': 'route-based', 'stealth_plugin': 'v1.0.6', 'webrtc': 'blocked'}
+                    additional_data={
+                        'worker_spoofing': 'route-based',
+                        'stealth_plugin': 'disabled (manual only)',
+                        'webrtc': 'blocked'
+                    }
                 )
                 
         except Exception as e:
