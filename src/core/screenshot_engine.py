@@ -1,9 +1,12 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine
-Screenshot capture and management for test validation (ASYNC FIX)
+STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine (FIXED)
+Enhanced screenshot capture with dynamic content handling
 
-Authors: kravitzcoder & MiniMax Agent
-Phase: 1 - Foundation & Workflows
+FIXES:
+- Extra wait time for dynamically-loaded pages
+- Fallback to viewport screenshot if full_page fails
+- Special handling for worker pages
+- Better error handling and logging
 """
 import logging
 import asyncio
@@ -33,19 +36,29 @@ class ScreenshotEngine:
         page: Any = None
     ) -> Optional[str]:
         """
-        Capture screenshot after waiting for page to fully load (async version)
+        Capture screenshot after waiting for page to fully load (FIXED)
         
-        Args:
-            browser_instance: Browser/driver instance
-            library_name: Name of the library being tested
-            url_name: Name of the URL being tested
-            wait_time: Time to wait before capturing (seconds)
-            page: Page object (for Playwright-style APIs)
-        
-        Returns:
-            Path to captured screenshot or None
+        IMPROVEMENTS:
+        - Extra wait for dynamic pages (fingerprint, bot-check)
+        - Special handling for worker pages
+        - Viewport fallback if full_page fails
+        - Better logging
         """
         try:
+            # Determine if this is a dynamic page needing extra time
+            dynamic_pages = ['fingerprint', 'bot-check', 'creepjs']
+            is_dynamic = any(keyword in url_name.lower() for keyword in dynamic_pages)
+            
+            if is_dynamic:
+                extra_wait = 5
+                logger.info(f"Dynamic page detected ({url_name}), adding {extra_wait}s extra wait")
+                await asyncio.sleep(extra_wait)
+            
+            # Special handling for worker pages
+            if 'worker' in url_name.lower():
+                logger.info(f"Worker page detected, adding 10s for worker initialization")
+                await asyncio.sleep(10)
+            
             logger.info(f"Waiting {wait_time}s before screenshot for {library_name}/{url_name}")
             await asyncio.sleep(wait_time)
             
@@ -57,10 +70,23 @@ class ScreenshotEngine:
             # Use page object if provided (Playwright case)
             if page is not None:
                 logger.info(f"Taking screenshot using page object for {library_name}")
-                await page.screenshot(path=str(filepath), full_page=True)
+                
+                # Try full_page first
+                try:
+                    await page.screenshot(path=str(filepath), full_page=True)
+                    logger.info(f"Full page screenshot captured: {filepath}")
+                except Exception as e:
+                    logger.warning(f"Full page screenshot failed: {e}, trying viewport screenshot")
+                    try:
+                        # Fallback to viewport screenshot
+                        await page.screenshot(path=str(filepath))
+                        logger.info(f"Viewport screenshot captured: {filepath}")
+                    except Exception as e2:
+                        logger.error(f"Viewport screenshot also failed: {e2}")
+                        return None
                 
                 if filepath.exists() and filepath.stat().st_size > 0:
-                    logger.info(f"Screenshot captured: {filepath}")
+                    logger.info(f"Screenshot verified: {filepath} ({filepath.stat().st_size} bytes)")
                     return str(filepath)
                 else:
                     logger.error(f"Screenshot file not created or empty: {filepath}")
@@ -81,18 +107,7 @@ class ScreenshotEngine:
         url_name: str,
         wait_time: int = 30
     ) -> Optional[str]:
-        """
-        Capture screenshot after waiting for page to fully load (sync version for Selenium)
-        
-        Args:
-            driver: Selenium driver instance
-            library_name: Name of the library being tested
-            url_name: Name of the URL being tested
-            wait_time: Time to wait before capturing (seconds)
-        
-        Returns:
-            Path to captured screenshot or None
-        """
+        """Capture screenshot after waiting (sync version for Selenium)"""
         try:
             logger.info(f"Waiting {wait_time}s before screenshot for {library_name}/{url_name}")
             time.sleep(wait_time)
@@ -109,17 +124,7 @@ class ScreenshotEngine:
         library_name: str, 
         test_name: str = "test"
     ) -> Optional[str]:
-        """
-        Capture screenshot using appropriate method for the browser library
-        
-        Args:
-            browser_instance: Browser/driver/page instance
-            library_name: Name of the library being tested
-            test_name: Name of the test/URL
-        
-        Returns:
-            Path to captured screenshot or None
-        """
+        """Capture screenshot using appropriate method for the browser library"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         filename = f"{library_name}_{test_name}_{timestamp}.png"
         filepath = self.screenshots_dir / filename
@@ -130,47 +135,39 @@ class ScreenshotEngine:
                 logger.info(f"Using save_screenshot method for {library_name}")
                 browser_instance.save_screenshot(str(filepath))
             
-            # Alternative Selenium method
             elif hasattr(browser_instance, 'get_screenshot_as_file'):
                 logger.info(f"Using get_screenshot_as_file method for {library_name}")
                 browser_instance.get_screenshot_as_file(str(filepath))
             
-            # Base64 screenshot capture
             elif hasattr(browser_instance, 'get_screenshot_as_base64'):
                 logger.info(f"Using base64 screenshot method for {library_name}")
                 screenshot_data = browser_instance.get_screenshot_as_base64()
                 with open(filepath, 'wb') as f:
                     f.write(base64.b64decode(screenshot_data))
             
-            # PNG screenshot capture
             elif hasattr(browser_instance, 'get_screenshot_as_png'):
                 logger.info(f"Using PNG screenshot method for {library_name}")
                 screenshot_data = browser_instance.get_screenshot_as_png()
                 with open(filepath, 'wb') as f:
                     f.write(screenshot_data)
             
-            # Specialized libraries with custom methods
             elif hasattr(browser_instance, 'take_screenshot'):
                 logger.info(f"Using take_screenshot method for {library_name}")
                 browser_instance.take_screenshot(str(filepath))
             
-            # NoDriver or other custom screenshot methods
             elif hasattr(browser_instance, 'get_screenshot'):
                 logger.info(f"Using get_screenshot method for {library_name}")
                 screenshot_data = browser_instance.get_screenshot()
                 if isinstance(screenshot_data, str):
-                    # Assume base64 data
                     with open(filepath, 'wb') as f:
                         f.write(base64.b64decode(screenshot_data))
                 elif isinstance(screenshot_data, bytes):
-                    # Raw image data
                     with open(filepath, 'wb') as f:
                         f.write(screenshot_data)
                 else:
                     raise Exception("Unknown screenshot data format")
             
             else:
-                # No screenshot capability detected
                 logger.warning(f"No screenshot method found for {library_name}")
                 return None
             
