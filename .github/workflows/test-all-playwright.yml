@@ -103,33 +103,16 @@ jobs:
         python -c "import patchright; print('✅ Patchright')"
         python -c "import camoufox; print('✅ Camoufox with geoip')"
     
-    # ADDED: Comprehensive browser verification
     - name: ✅ Verify Browser Installations
       run: |
         echo "=== Browser Verification ==="
         
-        # Test Chromium
-        python -c "
-from playwright.sync_api import sync_playwright
-p = sync_playwright().start()
-browser = p.chromium.launch()
-print('✅ Chromium functional')
-browser.close()
-p.stop()
-        " || {
+        python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); print('✅ Chromium functional'); browser.close(); p.stop()" || {
           echo "❌ Chromium verification failed!"
           exit 1
         }
         
-        # Test Firefox
-        python -c "
-from playwright.sync_api import sync_playwright
-p = sync_playwright().start()
-browser = p.firefox.launch()
-print('✅ Firefox functional')
-browser.close()
-p.stop()
-        " || {
+        python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.firefox.launch(); print('✅ Firefox functional'); browser.close(); p.stop()" || {
           echo "⚠️ Firefox verification failed (continuing)"
         }
         
