@@ -66,7 +66,7 @@ jobs:
     - name: 📦 Install Base Dependencies
       run: |
         pip install --upgrade pip setuptools wheel
-        pip install playwright aiohttp asyncio-throttle beautifulsoup4
+        pip install playwright aiohttp asyncio-throttle beautifulsoup4 Pillow
         echo "✅ Base dependencies installed"
         
     - name: 📦 Install Library-Specific Dependencies
@@ -81,16 +81,6 @@ jobs:
             python -c "import playwright; print('✅ Playwright verified')"
             ;;
             
-          "playwright_stealth")
-            pip install playwright playwright-stealth==1.0.6
-            playwright install chromium
-            playwright install-deps chromium
-            python -c "from playwright_stealth import stealth_async; print('✅ Playwright-stealth v1.0.6 verified')" || {
-              echo "❌ playwright-stealth import failed!"
-              exit 1
-            }
-            ;;
-            
           "patchright")
             pip install patchright
             patchright install chromium || echo "⚠️ Patchright install returned non-zero, continuing..."
@@ -98,7 +88,7 @@ jobs:
             ;;
             
           "camoufox")
-            pip install 'camoufox[geoip]'
+            pip install 'camoufox[geoip]' pygeoip
             python -c "import camoufox; print('✅ Camoufox verified')"
             ;;
             
@@ -115,7 +105,7 @@ jobs:
         echo "=== Browser Verification ==="
         
         case "${{ inputs.library }}" in
-          "playwright"|"playwright_stealth"|"patchright")
+          "playwright"|"patchright")
             python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); print('✅ Chromium browser functional'); browser.close(); p.stop()" || {
               echo "❌ Browser verification failed!"
               exit 1
