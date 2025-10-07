@@ -6,7 +6,7 @@ playwright>=1.40.0
 # Manual spoofing is more comprehensive anyway
 patchright>=1.0.0
 camoufox[geoip]>=0.3.0  # FIXED: Added geoip support
-pygeoip==0.3.2
+pygeoip>=0.3.2
 
 # Async utilities
 asyncio-throttle>=1.0.2
