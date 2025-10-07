@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-PLAYWRIGHT STEALTH TESTING FRAMEWORK - Main CLI
+PLAYWRIGHT STEALTH TESTING FRAMEWORK - Main CLI (FIXED)
 Command-line interface for Playwright-based stealth libraries
 
 Authors: kravitzcoder & MiniMax Agent
 Repository: https://github.com/kravitzcoder/stealth-testing-playwright
+
+FIXES:
+- Removed playwright_stealth (buggy v1.0.6)
+- Only 3 libraries: playwright, patchright, camoufox
+- Matches library_matrix.json configuration
 """
 
 import asyncio
@@ -30,10 +35,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Playwright-specific libraries
+# Playwright-specific libraries (FIXED: 3 only, no playwright_stealth)
 PLAYWRIGHT_LIBRARIES = [
     "playwright",
-    "playwright_stealth", 
     "patchright",
     "camoufox"
 ]
@@ -52,6 +56,7 @@ class PlaywrightTestCLI:
         self.proxy_config = self._load_json_config("proxy_config.json")
         
         logger.info("Playwright Test CLI initialized")
+        logger.info(f"📚 Available libraries: {', '.join(PLAYWRIGHT_LIBRARIES)}")
     
     def _load_json_config(self, filename: str) -> Dict[str, Any]:
         """Load JSON configuration file"""
@@ -165,7 +170,7 @@ class PlaywrightTestCLI:
                 logger.error("❌ No libraries selected for testing")
                 return
             
-            logger.info(f"Selected {len(libraries)} Playwright libraries: {', '.join(libraries)}")
+            logger.info(f"🎭 Selected {len(libraries)} Playwright libraries: {', '.join(libraries)}")
             
             # Verify dependencies (optional, won't block execution)
             if args.verify_deps:
@@ -184,11 +189,11 @@ class PlaywrightTestCLI:
                         library, proxy_config, args.device
                     )
                     all_results.extend(library_results)
-                    logger.info(f"Completed {library}: {len(library_results)} tests")
+                    logger.info(f"✅ Completed {library}: {len(library_results)} tests")
                     
             elif args.mode == "parallel":
                 # Run libraries in parallel
-                logger.info("Running tests in parallel mode")
+                logger.info("🔄 Running tests in parallel mode")
                 all_results = await self.orchestrator.test_multiple_libraries(
                     libraries, proxy_config, args.device, parallel=True
                 )
@@ -267,7 +272,7 @@ def main():
         epilog="""
 Examples:
   # Test specific library
-  python main.py --proxy env: --library playwright_stealth
+  python main.py --proxy env: --library playwright
   
   # Test all working libraries
   python main.py --proxy env: --status working
@@ -280,6 +285,9 @@ Examples:
   
   # GitHub Actions environment
   python main.py --proxy env: --all --mode parallel --output-prefix github_test
+
+Note: playwright-stealth has been REMOVED due to v1.0.6 bugs (undefined 'opts')
+      All libraries now use comprehensive manual stealth techniques
         """
     )
     
