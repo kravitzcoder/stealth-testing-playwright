@@ -63,42 +63,30 @@ jobs:
         echo "Chrome binary check:"
         which chromium-browser || which chromium || which google-chrome || echo "Chrome not in PATH"
         
-    - name: 📦 Install Base Dependencies
+    - name: 📦 Install Python Dependencies
       run: |
-        pip install --upgrade pip setuptools wheel
-        pip install playwright aiohttp asyncio-throttle beautifulsoup4
-        echo "✅ Base dependencies installed"
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        echo "✅ All Python dependencies installed from requirements.txt"
         
-    - name: 📦 Install Library-Specific Dependencies
+    - name: 📦 Install Library-Specific Browser
       run: |
-        echo "Installing dependencies for: ${{ inputs.library }}"
+        echo "Installing browser for: ${{ inputs.library }}"
         
         case "${{ inputs.library }}" in
           "playwright")
-            pip install playwright
             playwright install chromium
             playwright install-deps chromium
             python -c "import playwright; print('✅ Playwright verified')"
             ;;
             
-          "playwright_stealth")
-            pip install playwright playwright-stealth==1.0.6
-            playwright install chromium
-            playwright install-deps chromium
-            python -c "from playwright_stealth import stealth_async; print('✅ Playwright-stealth v1.0.6 verified')" || {
-              echo "❌ playwright-stealth import failed!"
-              exit 1
-            }
-            ;;
-            
           "patchright")
-            pip install patchright
             patchright install chromium || echo "⚠️ Patchright install returned non-zero, continuing..."
             python -c "import patchright; print('✅ Patchright verified')"
             ;;
             
           "camoufox")
-            pip install 'camoufox[geoip]'
+            # Camoufox downloads its browser on first run, so no install step needed here.
             python -c "import camoufox; print('✅ Camoufox verified')"
             ;;
             
@@ -108,14 +96,14 @@ jobs:
             ;;
         esac
         
-        echo "✅ Library-specific dependencies installed"
+        echo "✅ Library-specific browser setup complete."
     
     - name: ✅ Verify Browser Installation
       run: |
         echo "=== Browser Verification ==="
         
         case "${{ inputs.library }}" in
-          "playwright"|"playwright_stealth"|"patchright")
+          "playwright"|"patchright")
             python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); print('✅ Chromium browser functional'); browser.close(); p.stop()" || {
               echo "❌ Browser verification failed!"
               exit 1
