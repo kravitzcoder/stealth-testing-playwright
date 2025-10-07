@@ -1,8 +1,12 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Dependency Checker
+STEALTH BROWSER TESTING FRAMEWORK - Dependency Checker (FIXED)
 Verify all dependencies are properly installed before testing
 
 Authors: kravitzcoder & MiniMax Agent
+
+FIXES:
+- Removed playwright_stealth from dependency list
+- Only 3 Playwright libraries checked
 """
 import sys
 import importlib
@@ -11,28 +15,18 @@ from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Library dependency mapping
+# Library dependency mapping (FIXED: removed playwright_stealth)
 LIBRARY_DEPENDENCIES = {
     "playwright": ["playwright"],
-    "playwright_stealth": ["playwright", "playwright_stealth"],
     "patchright": ["patchright"],
     "camoufox": ["camoufox"],
-    "selenium_wire": ["selenium", "seleniumwire", "blinker"],
-    "undetected_chromedriver": ["selenium", "undetected_chromedriver"],
-    "selenium_stealth": ["selenium", "selenium_stealth"],
-    "selenium_driverless": ["selenium_driverless"],
-    "botasaurus": ["botasaurus"],
-    "nodriver": ["nodriver"],
-    "drissionpage": ["DrissionPage"],
-    "helium": ["helium", "selenium"],
-    "puppeteer_stealth": []  # Node.js package
 }
 
 # Critical version requirements
 VERSION_REQUIREMENTS = {
-    "blinker": "1.7.0",
     "playwright": "1.40.0",
-    "selenium": "4.15.0"
+    "patchright": "1.0.0",
+    "camoufox": "0.3.0"
 }
 
 
@@ -62,7 +56,7 @@ class DependencyChecker:
                     actual_version = getattr(module, "__version__", "unknown")
                     
                     if actual_version != "unknown":
-                        logger.info(f"✅ {dep}=={actual_version} (expected: {expected_version})")
+                        logger.info(f"✅ {dep}=={actual_version} (minimum: {expected_version})")
                     else:
                         logger.warning(f"⚠️ {dep} version unknown")
                 else:
@@ -92,57 +86,55 @@ class DependencyChecker:
         
         return results
     
-    def verify_critical_imports(self) -> bool:
-        """Verify critical imports work correctly"""
-        critical_tests = {
-            "playwright_stealth": lambda: self._test_playwright_stealth_import(),
-            "selenium_wire": lambda: self._test_selenium_wire_import(),
-        }
+    def verify_browser_installations(self) -> Dict[str, bool]:
+        """Verify browser binaries are installed"""
+        browsers = {}
         
-        all_passed = True
+        logger.info("=== Verifying Browser Installations ===")
         
-        for test_name, test_func in critical_tests.items():
-            try:
-                if test_func():
-                    logger.info(f"✅ {test_name} import test passed")
-                else:
-                    logger.error(f"❌ {test_name} import test failed")
-                    all_passed = False
-            except Exception as e:
-                logger.error(f"❌ {test_name} import test error: {e}")
-                all_passed = False
-        
-        return all_passed
-    
-    def _test_playwright_stealth_import(self) -> bool:
-        """Test playwright-stealth can be imported and used"""
+        # Check Playwright Chromium
         try:
-            from playwright_stealth import stealth_async
-            logger.info("✅ playwright-stealth import successful")
-            return True
-        except ImportError as e:
-            logger.error(f"❌ playwright-stealth import failed: {e}")
-            return False
-    
-    def _test_selenium_wire_import(self) -> bool:
-        """Test selenium-wire with blinker compatibility"""
+            from playwright.sync_api import sync_playwright
+            p = sync_playwright().start()
+            browser = p.chromium.launch()
+            browser.close()
+            p.stop()
+            logger.info("✅ Playwright Chromium: Installed")
+            browsers['playwright_chromium'] = True
+        except Exception as e:
+            logger.error(f"❌ Playwright Chromium: {e}")
+            browsers['playwright_chromium'] = False
+        
+        # Check Patchright Chromium
         try:
-            import blinker
-            logger.info(f"Blinker version: {blinker.__version__}")
-            
-            from seleniumwire import webdriver
-            logger.info("✅ selenium-wire import successful")
-            return True
+            from patchright.sync_api import sync_playwright as pr_sync_playwright
+            p = pr_sync_playwright().start()
+            browser = p.chromium.launch()
+            browser.close()
+            p.stop()
+            logger.info("✅ Patchright Chromium: Installed")
+            browsers['patchright_chromium'] = True
+        except Exception as e:
+            logger.error(f"❌ Patchright Chromium: {e}")
+            browsers['patchright_chromium'] = False
+        
+        # Camoufox downloads on first run, so just check import
+        try:
+            import camoufox
+            logger.info("✅ Camoufox: Module available (will download on first run)")
+            browsers['camoufox'] = True
         except ImportError as e:
-            logger.error(f"❌ selenium-wire import failed: {e}")
-            return False
+            logger.error(f"❌ Camoufox: {e}")
+            browsers['camoufox'] = False
+        
+        return browsers
     
     def generate_report(self) -> str:
         """Generate dependency check report"""
         results = self.verify_all_libraries()
         
         report = ["=" * 70]
-        report.append("DEPENDENCY VERIFICATION REPORT")
+        report.append("PLAYWRIGHT STEALTH TESTING - DEPENDENCY REPORT")
         report.append("=" * 70)
         report.append("")
         
@@ -167,6 +159,9 @@ class DependencyChecker:
             if missing:
                 report.append(f"  Missing: {', '.join(missing)}")
         
+        report.append("")
+        report.append("Note: playwright-stealth has been REMOVED due to v1.0.6 bugs")
+        report.append("      All libraries use comprehensive manual stealth techniques")
         report.append("=" * 70)
         
         return "\n".join(report)
@@ -181,10 +176,10 @@ def main():
         format='%(levelname)s - %(message)s'
     )
     
-    parser = argparse.ArgumentParser(description="Check stealth library dependencies")
-    parser.add_argument("--library", help="Check specific library")
+    parser = argparse.ArgumentParser(description="Check Playwright stealth library dependencies")
+    parser.add_argument("--library", help="Check specific library", choices=["playwright", "patchright", "camoufox"])
     parser.add_argument("--all", action="store_true", help="Check all libraries")
-    parser.add_argument("--critical", action="store_true", help="Test critical imports")
+    parser.add_argument("--browsers", action="store_true", help="Check browser installations")
     
     args = parser.parse_args()
     
@@ -198,9 +193,10 @@ def main():
         else:
             print(f"❌ {args.library}: Missing {missing}")
             sys.exit(1)
-    elif args.critical:
-        success = checker.verify_critical_imports()
-        sys.exit(0 if success else 1)
+    elif args.browsers:
+        browsers = checker.verify_browser_installations()
+        all_ok = all(browsers.values())
+        sys.exit(0 if all_ok else 1)
     elif args.all:
         report = checker.generate_report()
         print(report)
