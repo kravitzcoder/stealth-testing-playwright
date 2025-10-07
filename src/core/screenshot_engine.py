@@ -56,8 +56,8 @@ class ScreenshotEngine:
             
             # Special handling for worker pages
             if 'worker' in url_name.lower():
-                logger.info(f"Worker page detected, adding 10s for worker initialization")
-                await asyncio.sleep(10)
+                logger.info(f"Worker page detected, adding 20s for worker initialization and analysis")
+                await asyncio.sleep(20)  # Increased from 10s to 20s
             
             logger.info(f"Waiting {wait_time}s before screenshot for {library_name}/{url_name}")
             await asyncio.sleep(wait_time)
