@@ -44,7 +44,7 @@ class PlaywrightRunner:
         return False
     
     def _get_worker_injection_code(self, mobile_config: Dict[str, Any]) -> str:
-        """Generate worker injection code"""
+        """Generate worker injection code - FIXED to not wrap in IIFE"""
         user_agent = mobile_config.get('user_agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)')
         
         if 'iPhone' in user_agent or 'iPad' in user_agent:
@@ -66,82 +66,78 @@ class PlaywrightRunner:
         }
         tz_offset = tz_offsets.get(timezone, -120)
         
+        # FIXED: Don't wrap in IIFE, just define properties directly
         code = f"""
-// ===== WORKER CONTEXT SPOOFING =====
-(function() {{
-    'use strict';
-    
-    const config = {{
-        userAgent: '{user_agent}',
-        platform: '{platform}',
-        hardwareConcurrency: {hardware},
-        deviceMemory: {device_memory},
-        timezone: '{timezone}',
-        timezoneOffset: {tz_offset},
-        language: '{language}',
-        languages: ['{language}', 'en']
-    }};
-    
-    Object.defineProperty(self.navigator, 'userAgent', {{
-        get: () => config.userAgent, enumerable: true, configurable: true
-    }});
-    
-    Object.defineProperty(self.navigator, 'platform', {{
-        get: () => config.platform, enumerable: true, configurable: true
-    }});
-    
-    Object.defineProperty(self.navigator, 'hardwareConcurrency', {{
-        get: () => config.hardwareConcurrency, enumerable: true, configurable: true
-    }});
-    
-    Object.defineProperty(self.navigator, 'deviceMemory', {{
-        get: () => config.deviceMemory, enumerable: true, configurable: true
-    }});
-    
-    Object.defineProperty(self.navigator, 'language', {{
-        get: () => config.language, enumerable: true, configurable: true
-    }});
-    
-    Object.defineProperty(self.navigator, 'languages', {{
-        get: () => config.languages, enumerable: true, configurable: true
-    }});
-    
-    const OriginalDate = Date;
-    const tzOffset = config.timezoneOffset;
-    
-    self.Date = class extends OriginalDate {{
-        constructor(...args) {{
-            if (args.length === 0) {{ super(); }} else {{ super(...args); }}
-        }}
-        getTimezoneOffset() {{ return tzOffset; }}
-        toString() {{
-            return super.toString().replace(/GMT[+-]\\d{{4}}/, 'GMT' + (tzOffset > 0 ? '-' : '+') + String(Math.abs(tzOffset/60)).padStart(2, '0') + '00');
-        }}
-    }};
-    
-    self.Date.now = OriginalDate.now;
-    self.Date.parse = OriginalDate.parse;
-    self.Date.UTC = OriginalDate.UTC;
-    self.Date.prototype = OriginalDate.prototype;
-    
-    if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {{
-        const OriginalDateTimeFormat = Intl.DateTimeFormat;
-        self.Intl.DateTimeFormat = function(...args) {{
-            if (!args[1]) args[1] = {{}};
-            if (!args[1].timeZone) args[1].timeZone = config.timezone;
-            return new OriginalDateTimeFormat(...args);
-        }};
-        self.Intl.DateTimeFormat.prototype = OriginalDateTimeFormat.prototype;
-        self.Intl.DateTimeFormat.supportedLocalesOf = OriginalDateTimeFormat.supportedLocalesOf;
-    }}
-    
-    console.log('[Worker Injected]', {{
-        userAgent: self.navigator.userAgent,
-        platform: self.navigator.platform,
-        hardwareConcurrency: self.navigator.hardwareConcurrency
-    }});
-}})();
+// ===== WORKER CONTEXT SPOOFING (Minimal Injection) =====
+// Spoof navigator properties without blocking worker communication
 
+if (typeof self !== 'undefined' && self.navigator) {{
+    const originalUserAgent = self.navigator.userAgent;
+    const originalPlatform = self.navigator.platform;
+    
+    try {{
+        Object.defineProperty(self.navigator, 'userAgent', {{
+            get: function() {{ return '{user_agent}'; }},
+            enumerable: true,
+            configurable: true
+        }});
+    }} catch(e) {{ console.warn('[Worker] UA spoof failed:', e); }}
+    
+    try {{
+        Object.defineProperty(self.navigator, 'platform', {{
+            get: function() {{ return '{platform}'; }},
+            enumerable: true,
+            configurable: true
+        }});
+    }} catch(e) {{ console.warn('[Worker] Platform spoof failed:', e); }}
+    
+    try {{
+        Object.defineProperty(self.navigator, 'hardwareConcurrency', {{
+            get: function() {{ return {hardware}; }},
+            enumerable: true,
+            configurable: true
+        }});
+    }} catch(e) {{}}
+    
+    try {{
+        Object.defineProperty(self.navigator, 'deviceMemory', {{
+            get: function() {{ return {device_memory}; }},
+            enumerable: true,
+            configurable: true
+        }});
+    }} catch(e) {{}}
+    
+    try {{
+        Object.defineProperty(self.navigator, 'language', {{
+            get: function() {{ return '{language}'; }},
+            enumerable: true,
+            configurable: true
+        }});
+    }} catch(e) {{}}
+    
+    try {{
+        Object.defineProperty(self.navigator, 'languages', {{
+            get: function() {{ return ['{language}', 'en']; }},
+            enumerable: true,
+            configurable: true
+        }});
+    }} catch(e) {{}}
+}}
+
+// Minimal timezone spoofing - don't override Date entirely
+if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
+    const OriginalDate = Date;
+    const tzOffset = {tz_offset};
+    
+    try {{
+        const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset;
+        Date.prototype.getTimezoneOffset = function() {{
+            return tzOffset;
+        }};
+    }} catch(e) {{}}
+}}
+
+// End of worker spoofing - original worker script continues below
 """
         return code
     
