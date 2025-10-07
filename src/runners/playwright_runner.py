@@ -207,20 +207,19 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
         worker_injection = self._get_worker_injection_code(mobile_config)
         
         async def handle_route(route, request):
-            """Intercept worker scripts"""
+            """Intercept worker SCRIPTS only"""
             url = request.url
             resource_type = request.resource_type
             
-            is_worker = (
-                resource_type == 'worker' or
-                'worker' in url.lower() or
-                url.endswith('.worker.js') or
-                'creepjs/tests/workers' in url
+            is_worker_script = (
+                resource_type == 'script' and (
+                    'worker' in url.lower() and url.endswith('.js')
+                )
             )
             
-            if is_worker:
+            if is_worker_script:
                 try:
-                    logger.info(f"🔧 Intercepting worker: {url}")
+                    logger.info(f"🔧 Intercepting worker script: {url}")
                     response = await context.request.fetch(url)
                     original_script = await response.text()
                     modified_script = worker_injection + '\n\n' + original_script
@@ -230,9 +229,9 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                         content_type='application/javascript; charset=utf-8',
                         body=modified_script
                     )
-                    logger.info(f"✅ Worker injection successful")
+                    logger.info(f"✅ Worker script injection successful")
                 except Exception as e:
-                    logger.error(f"❌ Worker interception failed: {e}")
+                    logger.error(f"❌ Worker script interception failed: {e}")
                     await route.continue_()
             else:
                 await route.continue_()
@@ -663,8 +662,17 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                     worker_injection = self._get_worker_injection_code(mobile_config)
                     
                     async def handle_firefox_route(route, request):
+                        """Intercept worker SCRIPTS only for Firefox"""
                         url_str = request.url
-                        if 'worker' in url_str.lower() or request.resource_type == 'worker':
+                        resource_type = request.resource_type
+                        
+                        is_worker_script = (
+                            resource_type == 'script' and (
+                                'worker' in url_str.lower() and url_str.endswith('.js')
+                            )
+                        )
+                        
+                        if is_worker_script:
                             try:
                                 response = await context.request.fetch(url_str)
                                 original = await response.text()
@@ -674,7 +682,7 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                                     content_type='application/javascript',
                                     body=modified
                                 )
-                                logger.info(f"✅ Firefox worker intercepted: {url_str}")
+                                logger.info(f"✅ Firefox worker script intercepted: {url_str}")
                             except:
                                 await route.continue_()
                         else:
@@ -805,9 +813,19 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                 worker_injection = self._get_worker_injection_code(mobile_config)
                 
                 async def handle_route(route, request):
-                    if 'worker' in request.url.lower():
+                    """Intercept worker SCRIPTS only"""
+                    url_str = request.url
+                    resource_type = request.resource_type
+                    
+                    is_worker_script = (
+                        resource_type == 'script' and (
+                            'worker' in url_str.lower() and url_str.endswith('.js')
+                        )
+                    )
+                    
+                    if is_worker_script:
                         try:
-                            response = await context.request.fetch(request.url)
+                            response = await context.request.fetch(url_str)
                             original = await response.text()
                             modified = worker_injection + '\n\n' + original
                             await route.fulfill(
@@ -815,6 +833,7 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                                 content_type='application/javascript',
                                 body=modified
                             )
+                            logger.info(f"✅ Worker script intercepted: {url_str}")
                         except:
                             await route.continue_()
                     else:
