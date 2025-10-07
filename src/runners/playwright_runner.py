@@ -56,15 +56,14 @@ class PlaywrightRunner:
             
         hardware = mobile_config.get('hardware_concurrency', 8)
         device_memory = mobile_config.get('device_memory', 8)
-        timezone = mobile_config.get('timezone', 'Europe/Paris')
+        # FIXED: Use proxy timezone instead of device profile timezone
+        timezone = 'America/Los_Angeles'  # Match proxy location
         language = mobile_config.get('language', 'en-US').replace('_', '-')
         
-        tz_offsets = {
-            'Europe/Paris': -120, 'America/New_York': 300, 'America/Chicago': 360,
-            'America/Los_Angeles': 420, 'America/Denver': 420, 'America/Toronto': 300,
-            'Europe/London': -60, 'Europe/Berlin': -120,
-        }
-        tz_offset = tz_offsets.get(timezone, -120)
+        # FIXED: Los Angeles timezone offset (UTC-8 or UTC-7 depending on DST)
+        # Use -420 for PDT (summer) or -480 for PST (winter)
+        # Since it's October, we're in PDT (UTC-7)
+        tz_offset = 420  # PDT = UTC-7 = +420 minutes
         
         # FIXED: Don't wrap in IIFE, just define properties directly
         code = f"""
@@ -308,7 +307,8 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                     ]
                 )
                 
-                timezone = mobile_config.get('timezone', 'Europe/Paris')
+                # FIXED: Use proxy timezone (Los Angeles) to match IP location
+                timezone = 'America/Los_Angeles'
                 
                 context = await browser.new_context(
                     viewport=mobile_config.get('viewport', {'width': 375, 'height': 812}),
@@ -417,7 +417,7 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                     ]
                 )
                 
-                timezone = mobile_config.get('timezone', 'Europe/Paris')
+                timezone = 'America/Los_Angeles'
                 
                 context = await browser.new_context(
                     viewport=mobile_config.get('viewport', {'width': 375, 'height': 812}),
@@ -533,7 +533,7 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                     ]
                 )
                 
-                timezone = mobile_config.get('timezone', 'Europe/Paris')
+                timezone = 'America/Los_Angeles'
                 
                 context = await browser.new_context(
                     viewport=mobile_config.get('viewport', {'width': 375, 'height': 812}),
@@ -630,7 +630,7 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                     humanize=True,
                     block_images=False
                 ) as browser:
-                    timezone = mobile_config.get('timezone', 'Europe/Paris')
+                    timezone = 'America/Los_Angeles'
                     
                     context = await browser.new_context(
                         viewport={'width': mobile_config['viewport']['width'], 
