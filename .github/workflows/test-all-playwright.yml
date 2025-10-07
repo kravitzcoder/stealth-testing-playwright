@@ -75,28 +75,26 @@ jobs:
         echo "Firefox binary check:"
         which firefox || echo "Firefox not in PATH"
         
-    - name: 📦 Install All Playwright Dependencies
+    - name: 📦 Install All Dependencies & Browsers
       run: |
-        pip install --upgrade pip setuptools wheel
-        
-        # Install all Playwright libraries with FIXED versions
-        echo "=== Installing Playwright Libraries ==="
-        # REMOVED: playwright-stealth (buggy, breaks page JS with undefined 'opts')
-        pip install playwright patchright 'camoufox[geoip]'
+        pip install --upgrade pip
+        pip install -r requirements.txt
         
         # Install Playwright browsers
+        echo "=== Installing Browsers ==="
         playwright install chromium firefox
         playwright install-deps chromium firefox
         
         # Install Patchright browser
         patchright install chromium || echo "⚠️ Patchright install warning (continuing)"
         
-        # Verify installations (no more playwright-stealth check)
+        # Verify installations
         echo ""
         echo "=== Verifying Installations ==="
-        python -c "import playwright; print('✅ Playwright (manual stealth only)')"
+        python -c "import playwright; print('✅ Playwright')"
         python -c "import patchright; print('✅ Patchright')"
         python -c "import camoufox; print('✅ Camoufox with geoip')"
+        python -c "import pygeoip; print('✅ pygeoip')"
     
     - name: ✅ Verify Browser Installations
       run: |
@@ -116,7 +114,7 @@ jobs:
         echo "=== Installation Verification ==="
         echo ""
         echo "Python packages:"
-        pip list | grep -E "playwright|patchright|camoufox"
+        pip list | grep -E "playwright|patchright|camoufox|pygeoip"
         echo ""
         echo "Playwright browsers:"
         playwright install --list || true
@@ -157,7 +155,7 @@ jobs:
         ls -lh test_results/screenshots/ 2>/dev/null | tail -n 30 || echo "No screenshots"
         echo ""
         echo "Screenshot count by library:"
-        for lib in playwright playwright-stealth patchright camoufox; do
+        for lib in playwright patchright camoufox; do
           COUNT=$(ls test_results/screenshots/${lib}* 2>/dev/null | wc -l)
           echo "  $lib: $COUNT screenshots"
         done
