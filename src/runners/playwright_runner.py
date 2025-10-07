@@ -335,7 +335,18 @@ class PlaywrightRunner:
                 
                 # FIX: Extra wait for dynamic pages
                 if 'worker' in url_name.lower():
-                    await asyncio.sleep(10)  # Workers need time
+                    # Wait for workers to initialize, run, and display results
+                    logger.info("Waiting for workers to complete analysis...")
+                    await asyncio.sleep(15)  # Extra time for worker execution
+                    
+                    # Try to wait for the UI to render (wait for specific elements)
+                    try:
+                        # Wait for worker results to appear
+                        await page.wait_for_selector('text=/Window compared to/', timeout=10000)
+                        logger.info("✅ Worker results UI detected")
+                    except:
+                        logger.warning("Worker results UI not detected, continuing anyway")
+                        await asyncio.sleep(5)
                 else:
                     await asyncio.sleep(3)
                 
@@ -432,7 +443,24 @@ class PlaywrightRunner:
                     await page.goto(url, timeout=30000, wait_until='domcontentloaded')
                 
                 if 'worker' in url_name.lower():
-                    await asyncio.sleep(10)
+                    logger.info("Waiting for workers to complete analysis...")
+                    await asyncio.sleep(15)
+                    
+                    # Scroll page to trigger any lazy loading
+                    try:
+                        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                        await asyncio.sleep(2)
+                        await page.evaluate('window.scrollTo(0, 0)')
+                        await asyncio.sleep(1)
+                    except:
+                        pass
+                    
+                    try:
+                        await page.wait_for_selector('text=/Window compared to/', timeout=10000)
+                        logger.info("✅ Worker results UI detected")
+                    except:
+                        logger.warning("Worker results UI not detected, continuing anyway")
+                        await asyncio.sleep(5)
                 else:
                     await asyncio.sleep(3)
                 
@@ -662,7 +690,23 @@ class PlaywrightRunner:
                     
                     # FIX: Extra wait for workers
                     if 'worker' in url_name.lower():
-                        await asyncio.sleep(wait_time + 10)
+                        logger.info("Waiting for workers to complete analysis...")
+                        await asyncio.sleep(wait_time + 15)
+                        # Scroll to trigger lazy loading
+                        try:
+                            await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                            await asyncio.sleep(2)
+                            await page.evaluate('window.scrollTo(0, 0)')
+                            await asyncio.sleep(1)
+                        except:
+                            pass
+                        # Try to detect if results UI is ready
+                        try:
+                            await page.wait_for_selector('text=/Window compared to/', timeout=10000)
+                            logger.info("✅ Worker results UI detected")
+                        except:
+                            logger.warning("Worker results UI not detected, continuing anyway")
+                            await asyncio.sleep(5)
                     else:
                         await asyncio.sleep(wait_time + 3)
                     
@@ -784,7 +828,20 @@ class PlaywrightRunner:
                 await page.goto(url, timeout=30000)
                 
                 if 'worker' in url_name.lower():
-                    await asyncio.sleep(wait_time + 10)
+                    logger.info("Waiting for workers to complete analysis...")
+                    await asyncio.sleep(wait_time + 15)
+                    try:
+                        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+                        await asyncio.sleep(2)
+                        await page.evaluate('window.scrollTo(0, 0)')
+                        await asyncio.sleep(1)
+                    except:
+                        pass
+                    try:
+                        await page.wait_for_selector('text=/Window compared to/', timeout=10000)
+                        logger.info("✅ Worker results UI detected")
+                    except:
+                        await asyncio.sleep(5)
                 else:
                     await asyncio.sleep(wait_time)
                 
