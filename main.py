@@ -16,7 +16,7 @@ setup_logging()
 # from src.utils.config_loader import load_device_profile, get_proxy_config
 
 # ADDED the import for YOUR correct CSV-based device loader
-from src.core.device_profile_loader import DeviceProfileLoader 
+from src.utils.device_profile_loader import DeviceProfileLoader 
 
 # A function for proxy loading (was previously in the deleted config_loader.py)
 def get_proxy_config(proxy_arg):
