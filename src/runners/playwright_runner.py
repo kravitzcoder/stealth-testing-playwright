@@ -44,99 +44,176 @@ class PlaywrightRunner:
         return False
     
     def _get_worker_injection_code(self, mobile_config: Dict[str, Any]) -> str:
-        """Generate worker injection code - FIXED to not wrap in IIFE"""
+        """Generate enhanced worker injection code - FIXED for CreepJS consistency"""
         user_agent = mobile_config.get('user_agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)')
         
         if 'iPhone' in user_agent or 'iPad' in user_agent:
             platform = 'iPhone'
+            os_cpu = 'iPhone'
         elif 'Android' in user_agent:
             platform = 'Linux armv8l'
+            os_cpu = 'Linux armv8l'
         else:
             platform = 'iPhone'
+            os_cpu = 'iPhone'
             
         hardware = mobile_config.get('hardware_concurrency', 8)
         device_memory = mobile_config.get('device_memory', 8)
-        # FIXED: Use proxy timezone instead of device profile timezone
         timezone = 'America/Los_Angeles'  # Match proxy location
         language = mobile_config.get('language', 'en-US').replace('_', '-')
-        
-        # FIXED: Los Angeles timezone offset (UTC-8 or UTC-7 depending on DST)
-        # Use -420 for PDT (summer) or -480 for PST (winter)
-        # Since it's October, we're in PDT (UTC-7)
         tz_offset = 420  # PDT = UTC-7 = +420 minutes
         
-        # FIXED: Don't wrap in IIFE, just define properties directly
+        # Extract browser info for consistency
+        if 'Chrome/' in user_agent:
+            app_version = user_agent.split('Mozilla/')[1] if 'Mozilla/' in user_agent else '5.0'
+            vendor = 'Apple Computer, Inc.' if 'iPhone' in user_agent else 'Google Inc.'
+        else:
+            app_version = '5.0'
+            vendor = 'Apple Computer, Inc.'
+        
         code = f"""
-// ===== WORKER CONTEXT SPOOFING (Minimal Injection) =====
-// Spoof navigator properties without blocking worker communication
+// ===== ENHANCED WORKER SPOOFING - CreepJS Consistency Fix =====
+// Comprehensive worker fingerprinting fix for all worker types
 
-if (typeof self !== 'undefined' && self.navigator) {{
-    const originalUserAgent = self.navigator.userAgent;
-    const originalPlatform = self.navigator.platform;
+(function() {{
+    'use strict';
     
-    try {{
-        Object.defineProperty(self.navigator, 'userAgent', {{
-            get: function() {{ return '{user_agent}'; }},
-            enumerable: true,
-            configurable: true
-        }});
-    }} catch(e) {{ console.warn('[Worker] UA spoof failed:', e); }}
+    // Core navigation properties that must match across all contexts
+    const spoofedProperties = {{
+        userAgent: '{user_agent}',
+        platform: '{platform}',
+        oscpu: '{os_cpu}',
+        language: '{language}',
+        languages: ['{language}', 'en'],
+        hardwareConcurrency: {hardware},
+        deviceMemory: {device_memory},
+        appVersion: '{app_version}',
+        vendor: '{vendor}',
+        cookieEnabled: true,
+        onLine: true,
+        doNotTrack: null,
+        maxTouchPoints: 5,
+        appName: 'Netscape',
+        appCodeName: 'Mozilla',
+        product: 'Gecko',
+        productSub: '20030107',
+        vendorSub: '',
+        buildID: '20181001000000'
+    }};
     
-    try {{
-        Object.defineProperty(self.navigator, 'platform', {{
-            get: function() {{ return '{platform}'; }},
-            enumerable: true,
-            configurable: true
-        }});
-    }} catch(e) {{ console.warn('[Worker] Platform spoof failed:', e); }}
+    const timezoneOffset = {tz_offset};
     
-    try {{
-        Object.defineProperty(self.navigator, 'hardwareConcurrency', {{
-            get: function() {{ return {hardware}; }},
-            enumerable: true,
-            configurable: true
-        }});
-    }} catch(e) {{}}
+    // Function to safely define property
+    function defineSafeProperty(obj, prop, value) {{
+        try {{
+            if (obj && typeof obj === 'object') {{
+                Object.defineProperty(obj, prop, {{
+                    get: function() {{ return value; }},
+                    enumerable: true,
+                    configurable: true
+                }});
+            }}
+        }} catch(e) {{
+            // Silently fail to avoid console spam
+        }}
+    }}
     
-    try {{
-        Object.defineProperty(self.navigator, 'deviceMemory', {{
-            get: function() {{ return {device_memory}; }},
-            enumerable: true,
-            configurable: true
+    // Apply spoofing to navigator object (works in all worker contexts)
+    function spoofNavigator(nav) {{
+        if (!nav) return;
+        
+        Object.keys(spoofedProperties).forEach(prop => {{
+            defineSafeProperty(nav, prop, spoofedProperties[prop]);
         }});
-    }} catch(e) {{}}
+        
+        // Remove automation indicators
+        defineSafeProperty(nav, 'webdriver', undefined);
+    }}
     
-    try {{
-        Object.defineProperty(self.navigator, 'language', {{
-            get: function() {{ return '{language}'; }},
-            enumerable: true,
-            configurable: true
-        }});
-    }} catch(e) {{}}
+    // Apply timezone spoofing
+    function spoofTimezone() {{
+        if (typeof Date !== 'undefined' && Date.prototype.getTimezoneOffset) {{
+            try {{
+                Date.prototype.getTimezoneOffset = function() {{
+                    return timezoneOffset;
+                }};
+                
+                // Also spoof Intl.DateTimeFormat if available
+                if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {{
+                    const OriginalDateTimeFormat = Intl.DateTimeFormat;
+                    Intl.DateTimeFormat = function(...args) {{
+                        const options = args[1] || {{}};
+                        if (!options.timeZone) {{
+                            options.timeZone = '{timezone}';
+                            args[1] = options;
+                        }}
+                        return new OriginalDateTimeFormat(...args);
+                    }};
+                }}
+            }} catch(e) {{
+                // Silently fail
+            }}
+        }}
+    }}
     
-    try {{
-        Object.defineProperty(self.navigator, 'languages', {{
-            get: function() {{ return ['{language}', 'en']; }},
-            enumerable: true,
-            configurable: true
-        }});
-    }} catch(e) {{}}
-}}
+    // Apply comprehensive spoofing to current context
+    function applyWorkerSpoofing() {{
+        // Spoof self.navigator (available in all worker types)
+        if (typeof self !== 'undefined' && self.navigator) {{
+            spoofNavigator(self.navigator);
+        }}
+        
+        // Spoof global navigator if different from self.navigator
+        if (typeof navigator !== 'undefined' && navigator !== self?.navigator) {{
+            spoofNavigator(navigator);
+        }}
+        
+        // Apply timezone spoofing
+        spoofTimezone();
+        
+        // Worker-specific spoofing
+        if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {{
+            defineSafeProperty(self, 'name', '');
+            
+            // Override importScripts to ensure our spoofing persists
+            if (typeof importScripts !== 'undefined') {{
+                const originalImportScripts = importScripts;
+                self.importScripts = function(...urls) {{
+                    const result = originalImportScripts.apply(this, urls);
+                    // Re-apply spoofing after importing scripts
+                    setTimeout(() => {{
+                        spoofNavigator(self.navigator || navigator);
+                    }}, 0);
+                    return result;
+                }};
+            }}
+        }}
+        
+        // DedicatedWorkerGlobalScope specific
+        if (typeof DedicatedWorkerGlobalScope !== 'undefined' && self instanceof DedicatedWorkerGlobalScope) {{
+            defineSafeProperty(self, 'name', '');
+        }}
+        
+        // SharedWorkerGlobalScope specific
+        if (typeof SharedWorkerGlobalScope !== 'undefined' && self instanceof SharedWorkerGlobalScope) {{
+            defineSafeProperty(self, 'name', '');
+        }}
+        
+        // ServiceWorkerGlobalScope specific
+        if (typeof ServiceWorkerGlobalScope !== 'undefined' && self instanceof ServiceWorkerGlobalScope) {{
+            defineSafeProperty(self, 'serviceWorker', self.serviceWorker);
+        }}
+    }}
+    
+    // Apply spoofing immediately and with delays to catch late-binding
+    applyWorkerSpoofing();
+    setTimeout(applyWorkerSpoofing, 1);
+    setTimeout(applyWorkerSpoofing, 10);
+    setTimeout(applyWorkerSpoofing, 100);
+    
+}})();
 
-// Minimal timezone spoofing - don't override Date entirely
-if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
-    const OriginalDate = Date;
-    const tzOffset = {tz_offset};
-    
-    try {{
-        const originalGetTimezoneOffset = Date.prototype.getTimezoneOffset;
-        Date.prototype.getTimezoneOffset = function() {{
-            return tzOffset;
-        }};
-    }} catch(e) {{}}
-}}
-
-// End of worker spoofing - original worker script continues below
+// ===== END ENHANCED WORKER SPOOFING =====
 """
         return code
     
@@ -154,26 +231,75 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
         hardware = mobile_config.get('hardware_concurrency', 8)
         device_memory = mobile_config.get('device_memory', 8)
         
+        # Extract detailed info for consistency
+        if 'Chrome/' in user_agent:
+            app_version = user_agent.split('Mozilla/')[1] if 'Mozilla/' in user_agent else '5.0'
+            vendor = 'Apple Computer, Inc.' if 'iPhone' in user_agent else 'Google Inc.'
+        else:
+            app_version = '5.0'
+            vendor = 'Apple Computer, Inc.'
+            
+        if 'iPhone' in user_agent or 'iPad' in user_agent:
+            os_cpu = 'iPhone'
+        elif 'Android' in user_agent:
+            os_cpu = 'Linux armv8l'
+        else:
+            os_cpu = 'iPhone'
+        
+        language = mobile_config.get('language', 'en-US').replace('_', '-')
+        
         main_window_spoof = f"""
-            Object.defineProperty(navigator, 'platform', {{
-                get: () => '{platform}', enumerable: true, configurable: true
-            }});
+            // Enhanced main window spoofing - must match worker context exactly
+            function defineNavigatorProperty(prop, value) {{
+                try {{
+                    Object.defineProperty(navigator, prop, {{
+                        get: () => value,
+                        enumerable: true,
+                        configurable: true
+                    }});
+                }} catch(e) {{
+                    // Silently fail
+                }}
+            }}
             
-            Object.defineProperty(navigator, 'hardwareConcurrency', {{
-                get: () => {hardware}, enumerable: true, configurable: true
-            }});
+            // Core properties that must match workers EXACTLY
+            defineNavigatorProperty('userAgent', '{user_agent}');
+            defineNavigatorProperty('platform', '{platform}');
+            defineNavigatorProperty('oscpu', '{os_cpu}');
+            defineNavigatorProperty('language', '{language}');
+            defineNavigatorProperty('languages', ['{language}', 'en']);
+            defineNavigatorProperty('hardwareConcurrency', {hardware});
+            defineNavigatorProperty('deviceMemory', {device_memory});
+            defineNavigatorProperty('appVersion', '{app_version}');
+            defineNavigatorProperty('vendor', '{vendor}');
+            defineNavigatorProperty('cookieEnabled', true);
+            defineNavigatorProperty('onLine', true);
+            defineNavigatorProperty('doNotTrack', null);
+            defineNavigatorProperty('maxTouchPoints', 5);
+            defineNavigatorProperty('appName', 'Netscape');
+            defineNavigatorProperty('appCodeName', 'Mozilla');
+            defineNavigatorProperty('product', 'Gecko');
+            defineNavigatorProperty('productSub', '20030107');
+            defineNavigatorProperty('vendorSub', '');
+            defineNavigatorProperty('buildID', '20181001000000');
             
-            Object.defineProperty(navigator, 'deviceMemory', {{
-                get: () => {device_memory}, enumerable: true, configurable: true
-            }});
+            // Remove automation indicators
+            defineNavigatorProperty('webdriver', undefined);
+            delete navigator.__proto__.webdriver;
             
-            Object.defineProperty(navigator, 'webdriver', {{
-                get: () => undefined, enumerable: true, configurable: true
-            }});
-            
+            // Chrome-specific spoofing
             if (!window.chrome) {{ window.chrome = {{}}; }}
             window.chrome.runtime = {{}};
             
+            // Plugin spoofing for consistency
+            defineNavigatorProperty('plugins', [
+                {{ name: 'PDF Viewer', filename: 'internal-pdf-viewer' }},
+                {{ name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer' }},
+                {{ name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer' }},
+                {{ name: 'WebKit built-in PDF', filename: 'internal-pdf-viewer' }}
+            ]);
+            
+            // Permissions API spoofing
             if (navigator.permissions && navigator.permissions.query) {{
                 const originalQuery = navigator.permissions.query;
                 navigator.permissions.query = (parameters) => (
@@ -183,21 +309,23 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
                 );
             }}
             
-            Object.defineProperty(navigator, 'plugins', {{
-                get: () => [
-                    {{ name: 'PDF Viewer', filename: 'internal-pdf-viewer' }},
-                    {{ name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer' }},
-                    {{ name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer' }},
-                    {{ name: 'WebKit built-in PDF', filename: 'internal-pdf-viewer' }}
-                ],
-                enumerable: true
-            }});
+            // Override Worker constructors to inject spoofing into new workers
+            if (typeof Worker !== 'undefined') {{
+                const OriginalWorker = Worker;
+                window.Worker = class extends OriginalWorker {{
+                    constructor(scriptURL, options) {{
+                        // If it's a blob URL or data URL, enhance it with our spoofing
+                        if (typeof scriptURL === 'string' && !scriptURL.startsWith('blob:') && !scriptURL.startsWith('data:')) {{
+                            // For external scripts, our route interception handles this
+                            super(scriptURL, options);
+                        }} else {{
+                            super(scriptURL, options);
+                        }}
+                    }}
+                }};
+            }}
             
-            console.log('[Main Window] Spoofed:', {{
-                platform: navigator.platform,
-                hardwareConcurrency: navigator.hardwareConcurrency,
-                deviceMemory: navigator.deviceMemory
-            }});
+            console.log('[Main Window] Enhanced spoofing applied for worker consistency');
         """
         
         await context.add_init_script(main_window_spoof)
@@ -206,31 +334,53 @@ if (typeof self !== 'undefined' && typeof Date !== 'undefined') {{
         worker_injection = self._get_worker_injection_code(mobile_config)
         
         async def handle_route(route, request):
-            """Intercept worker SCRIPTS only"""
+            """Enhanced route interception for worker scripts and dynamic workers"""
             url = request.url
             resource_type = request.resource_type
             
+            # Detect worker scripts more comprehensively
             is_worker_script = (
                 resource_type == 'script' and (
-                    'worker' in url.lower() and url.endswith('.js')
+                    'worker' in url.lower() or
+                    url.endswith('.js') and any(keyword in url.lower() for keyword in [
+                        'worker', 'service-worker', 'sw.js', 'webworker'
+                    ])
                 )
+            ) or (
+                # Also catch XHR/fetch requests for worker scripts
+                resource_type in ['xhr', 'fetch'] and url.endswith('.js') and 'worker' in url.lower()
             )
             
-            if is_worker_script:
+            # Also intercept blob URLs that might contain worker code
+            is_blob_worker = url.startswith('blob:') and resource_type == 'script'
+            
+            if is_worker_script or is_blob_worker:
                 try:
-                    logger.info(f"🔧 Intercepting worker script: {url}")
+                    logger.info(f"🔧 Intercepting worker script: {url} (type: {resource_type})")
+                    
+                    if is_blob_worker:
+                        # For blob URLs, we need to handle differently
+                        await route.continue_()
+                        return
+                    
                     response = await context.request.fetch(url)
                     original_script = await response.text()
+                    
+                    # Inject our enhanced worker spoofing at the very beginning
                     modified_script = worker_injection + '\n\n' + original_script
                     
                     await route.fulfill(
                         status=200,
                         content_type='application/javascript; charset=utf-8',
+                        headers={{
+                            'Cache-Control': 'no-cache',
+                            'Access-Control-Allow-Origin': '*'
+                        }},
                         body=modified_script
                     )
-                    logger.info(f"✅ Worker script injection successful")
+                    logger.info(f"✅ Enhanced worker script injection successful for {url}")
                 except Exception as e:
-                    logger.error(f"❌ Worker script interception failed: {e}")
+                    logger.error(f"❌ Worker script interception failed for {url}: {e}")
                     await route.continue_()
             else:
                 await route.continue_()
