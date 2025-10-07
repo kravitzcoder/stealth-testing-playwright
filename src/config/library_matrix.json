@@ -11,24 +11,14 @@
           "status": "working",
           "priority": 1,
           "installation_command": "pip install playwright && playwright install chromium",
-          "description": "Native Playwright with manual stealth techniques"
-        },
-        "playwright_stealth": {
-          "name": "playwright-stealth", 
-          "display_name": "Playwright + Stealth",
-          "category": "playwright",
-          "proxy_auth_support": "native",
-          "status": "working",
-          "priority": 1,
-          "installation_command": "pip install playwright playwright-stealth && playwright install chromium",
-          "description": "Playwright with stealth plugin for enhanced anti-detection"
+          "description": "Native Playwright with comprehensive manual stealth techniques"
         },
         "patchright": {
           "name": "patchright",
           "display_name": "Patchright",
           "category": "playwright", 
           "proxy_auth_support": "native",
-          "status": "testing",
+          "status": "working",
           "priority": 2,
           "installation_command": "pip install patchright && patchright install chromium",
           "description": "Patched Playwright fork with built-in stealth capabilities"
@@ -40,8 +30,8 @@
           "proxy_auth_support": "native", 
           "status": "working",
           "priority": 2,
-          "installation_command": "pip install camoufox",
-          "description": "Firefox-based stealth browser with Playwright API"
+          "installation_command": "pip install camoufox[geoip]",
+          "description": "Firefox-based stealth browser with Playwright API and GeoIP spoofing"
         }
       }
     }
