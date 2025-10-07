@@ -9,7 +9,6 @@ on:
         type: choice
         options:
           - playwright
-          - playwright_stealth
           - patchright
           - camoufox
       device:
