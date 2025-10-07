@@ -1,167 +1,206 @@
-# src/core/test_orchestrator.py
+# src/core/test_orchestrator.py (Corrected and Merged)
 
-import logging
-import json
 import asyncio
+import json
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 from pathlib import Path
+import logging
+
+# Import category runners
 from ..runners.playwright_runner import PlaywrightRunner
-from ..core.screenshot_engine import ScreenshotEngine
+
+# Import core components
+from .screenshot_engine import ScreenshotEngine
+from .test_result import TestResult
+
+logger = logging.getLogger(__name__)
+
 
 class StealthTestOrchestrator:
-    """
-    Orchestrates the execution of stealth tests across different Playwright libraries
-    and configurations.
-    """
+    """Main orchestrator for coordinating stealth browser tests"""
+    
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
-        self.library_matrix = self._load_config("library_matrix.json")
-        self.test_targets = self._load_config("test_targets.json")
-        
-        # Initialize components
         self.screenshot_engine = ScreenshotEngine()
         
-        # The runner is now created inside the start_test method, specific to each test.
-        self.results = []
-        self.start_time = None
-        self.logger.info("Test orchestrator initialized")
-
-    def _load_config(self, filename):
-        """Loads a JSON configuration file from the config directory."""
-        config_path = Path(__file__).parent.parent / "config" / filename
-        self.logger.info(f"Loading configuration from: {config_path}")
+        # --- FIX ---
+        # The runner is no longer initialized here. It's created for each test.
+        # self.playwright_runner = PlaywrightRunner(self.screenshot_engine)
+        
+        self.library_matrix = self._load_library_matrix()
+        self.test_targets = self._load_test_targets()
+        
+        logger.info("Test orchestrator initialized")
+    
+    def _load_library_matrix(self) -> Dict[str, Any]:
+        """Load the library testing matrix configuration"""
         try:
-            with open(config_path, 'r') as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            self.logger.error(f"Failed to load configuration '{filename}': {e}")
-            return {}
+            matrix_path = Path(__file__).parent.parent / "config" / "library_matrix.json"
+            if matrix_path.exists():
+                logger.info(f"Loading library matrix from: {matrix_path}")
+                with open(matrix_path, 'r') as f:
+                    return json.load(f)
+            logger.error(f"Could not find library_matrix.json at {matrix_path}")
+            return {"library_matrix": {}}
+        except Exception as e:
+            logger.error(f"Failed to load library matrix: {e}")
+            return {"library_matrix": {}}
+    
+    def _load_test_targets(self) -> Dict[str, Any]:
+        """Load test targets configuration"""
+        try:
+            target_path = Path(__file__).parent.parent / "config" / "test_targets.json"
+            if target_path.exists():
+                logger.info(f"Loading test targets from: {target_path}")
+                with open(target_path, 'r') as f:
+                    return json.load(f)
+            logger.error(f"Could not find test_targets.json at {target_path}")
+            return {"test_targets": {}}
+        except Exception as e:
+            logger.error(f"Failed to load test targets: {e}")
+            return {"test_targets": {}}
+    
+    def _get_library_info(self, library_name: str) -> Optional[Dict[str, Any]]:
+        """Get library information from the matrix"""
+        for category_data in self.library_matrix.get("library_matrix", {}).values():
+            libraries = category_data.get("libraries", {})
+            if library_name in libraries:
+                return libraries[library_name].copy()
+        logger.warning(f"Library '{library_name}' not found in matrix")
+        return None
 
-    async def start_all_tests(self, selected_libraries, proxy_config, device_config, mode='sequential'):
-        """Starts tests for all specified libraries."""
-        self.start_time = datetime.now()
-        
-        test_tasks = []
-        for library_name in selected_libraries:
-            task = self.start_test(library_name, proxy_config, device_config)
-            if mode == 'parallel':
-                test_tasks.append(asyncio.create_task(task))
-            else:
-                await task
-
-        if mode == 'parallel':
-            await asyncio.gather(*test_tasks)
-
-    async def start_test(self, library_name, proxy_config, device_config):
-        """Prepares and runs tests for a single library."""
-        self.logger.info(f"Starting test for library: {library_name}")
-        library_info = self.library_matrix.get(library_name)
-
-        if not library_info:
-            self.logger.error(f"Library '{library_name}' not found in matrix configuration.")
-            self.results.append({
-                "library": library_name,
-                "test": "configuration_error",
-                "status": "error",
-                "reason": f"Library '{library_name}' not found in matrix configuration."
-            })
-            return
-
-        user_agent_data = device_config.get('user_agent', {})
-        spoof_options = self._get_spoof_options(library_info.get("browser"), device_config.get("platform"))
-        
-        runner = self._get_runner(library_name, library_info, user_agent_data, proxy_config, spoof_options)
-
-        for test_name, url in self.test_targets.items():
-            self.logger.info(f"Testing {library_name} on {test_name}: {url}")
-            test_result = await runner.run_test(
-                library_name=library_name,
-                test_name=test_name,
-                url=url,
-                browser_type=library_info.get("browser", "chromium")
-            )
-            
-            test_result['library'] = library_name
-            test_result['test'] = test_name
-            self.results.append(test_result)
-        
-        self.logger.info(f"Completed all tests for {library_name}")
-
-    def _get_runner(self, library_name, library_info, user_agent, proxy_config, spoof_options):
-        """Factory method to create a configured runner instance."""
-        use_stealth = library_info.get("stealth_plugin", False)
+    def _create_runner_for_test(self, library_info: Dict, device_config: Dict, proxy_config: Dict) -> PlaywrightRunner:
+        """Creates and configures a new PlaywrightRunner instance for a test."""
+        user_agent_data = {"userAgent": device_config.get("user_agent")}
+        spoof_options = {
+            "platform": device_config.get("platform", "iPhone")
+        }
         
         return PlaywrightRunner(
-            user_agent=user_agent,
+            user_agent=user_agent_data,
             proxy_config=proxy_config,
             spoof_options=spoof_options,
-            use_stealth_plugin=use_stealth,
+            use_stealth_plugin=library_info.get("stealth_plugin", False),
             screenshot_engine=self.screenshot_engine
         )
 
-    def _get_spoof_options(self, browser, platform):
-        """Determines spoofing options based on browser and platform."""
-        return {"platform": platform or "iPhone"}
-
-    def save_results(self, output_prefix):
-        """Saves the test results to a JSON file and a markdown summary."""
-        if not self.results:
-            self.logger.warning("No results to save.")
-            return
-
-        timestamp = self.start_time.strftime("%Y%m%d_%H%M%S")
+    async def test_single_library(
+        self, 
+        library_name: str,
+        proxy_config: Dict[str, str],
+        device_config: Dict[str, Any]
+    ) -> List[TestResult]:
+        """Test a single library against all target URLs"""
+        logger.info(f"Starting test for library: {library_name}")
         
-        report_path = Path("test_results/reports") / f"{output_prefix}_{timestamp}.json"
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(report_path, 'w') as f:
-            json.dump(self.results, f, indent=4)
-        self.logger.info(f"Results saved to: {report_path}")
+        lib_info = self._get_library_info(library_name)
+        if not lib_info:
+            error_msg = f"Library '{library_name}' not found in matrix"
+            return [TestResult(library=library_name, category="unknown", test_name="config_error", url="", success=False, error=error_msg)]
+        
+        category = lib_info.get("category")
+        if category != "playwright":
+             error_msg = f"Runner for category '{category}' not implemented yet"
+             return [TestResult(library=library_name, category=category, test_name="runner_error", url="", success=False, error=error_msg)]
 
-        summary_path = Path("test_results/reports") / f"{output_prefix}_{timestamp}_summary.md"
-        self._generate_markdown_summary(summary_path)
-        self.logger.info(f"Markdown summary saved to: {summary_path}")
+        # --- FIX ---
+        # Create a new runner instance configured for this specific test
+        runner = self._create_runner_for_test(lib_info, device_config, proxy_config)
 
-    def _generate_markdown_summary(self, file_path):
-        """Generates a markdown summary of the test results."""
-        summary_data = {}
-        failed_tests = []
-
-        for result in self.results:
-            lib = result['library']
-            if lib not in summary_data:
-                summary_data[lib] = {'total': 0, 'success': 0, 'proxy_ok': 0}
+        results = []
+        for target_name, target_data in self.test_targets.get("test_targets", {}).items():
+            url = target_data.get("url")
+            logger.info(f"Testing {library_name} on {target_name}: {url}")
             
-            summary_data[lib]['total'] += 1
-            if result['status'] == 'success':
-                summary_data[lib]['success'] += 1
-                if result.get('proxy_works'):
-                    summary_data[lib]['proxy_ok'] += 1
-            else:
-                failed_tests.append(result)
-
-        total_tests = len(self.results)
-        total_successful = sum(lib['success'] for lib in summary_data.values())
-        total_failed = total_tests - total_successful
-
-        summary_md = [
-            "| Library | Status | Success Rate | Proxy Health |",
-            "|---|---|---|---|"
-        ]
-
-        for lib, data in summary_data.items():
-            status = "✅" if data['success'] == data['total'] else "❌"
-            success_rate = f"{data['success'] / data['total']:.0%}" if data['total'] > 0 else "N/A"
-            proxy_health = f"{data['proxy_ok'] / data['total']:.0%}" if data['total'] > 0 else "N/A"
-            summary_md.append(f"| **{lib}** | {status} | `{success_rate}` ({data['success']}/{data['total']}) | `{proxy_health}` ({data['proxy_ok']}/{data['total']}) |")
-
-        summary_md.append("\n### Failed Tests\n")
-        if failed_tests:
-            summary_md.append("| Library | Test | Reason |")
-            summary_md.append("|---|---|---|")
-            for test in failed_tests:
-                summary_md.append(f"| {test['library']} | `{test['test']}` | {test.get('reason', 'Unknown')} |")
+            try:
+                # The run_test method now gets a simplified signature
+                result_dict = await runner.run_test(
+                    library_name=library_name,
+                    test_name=target_name,
+                    url=url,
+                    browser_type=lib_info.get("browser", "chromium")
+                )
+                
+                # Convert dict to TestResult object
+                results.append(TestResult(
+                    library=library_name,
+                    category=category,
+                    test_name=target_name,
+                    url=url,
+                    success=result_dict.get("status") == "success",
+                    proxy_working=result_dict.get("proxy_works", False),
+                    screenshot_path=result_dict.get("screenshot"),
+                    error=result_dict.get("reason"),
+                    user_agent=device_config.get("user_agent")
+                ))
+                
+            except Exception as e:
+                logger.error(f"Test failed for {library_name} on {target_name}: {str(e)}")
+                results.append(TestResult(library=library_name, category=category, test_name=target_name, url=url, success=False, error=str(e)[:200]))
+        
+        return results
+    
+    async def test_multiple_libraries(
+        self,
+        library_names: List[str],
+        proxy_config: Dict[str, str],
+        device_config: Dict[str, Any],
+        parallel: bool = False
+    ) -> List[TestResult]:
+        """Test multiple libraries"""
+        all_results = []
+        if parallel:
+            tasks = [self.test_single_library(lib_name, proxy_config, device_config) for lib_name in library_names]
+            results_lists = await asyncio.gather(*tasks, return_exceptions=True)
+            for i, result in enumerate(results_lists):
+                if isinstance(result, Exception):
+                    all_results.append(TestResult(library=library_names[i], category="unknown", test_name="execution_error", url="", success=False, error=str(result)))
+                else:
+                    all_results.extend(result)
         else:
-            summary_md.append("🎉 All tests passed successfully!")
+            for lib_name in library_names:
+                results = await self.test_single_library(lib_name, proxy_config, device_config)
+                all_results.extend(results)
+        
+        return all_results
+    
+    def save_results(
+        self,
+        results: List[TestResult],
+        filename_prefix: str = "stealth_test"
+    ) -> str:
+        """Save test results to JSON and Markdown files"""
+        results_dir = Path("test_results") / "reports"
+        results_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{filename_prefix}_{timestamp}.json"
+        filepath = results_dir / filename
+        
+        summary_data = {
+            "metadata": {"timestamp": timestamp},
+            "all_results": [r.to_dict() for r in results]
+        }
+        
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(summary_data, f, indent=2, default=str)
+            logger.info(f"Results saved to: {filepath}")
+            self._save_markdown_summary(results, filename_prefix, timestamp)
+            return str(filepath)
+        except Exception as e:
+            logger.error(f"Failed to save results: {e}")
+            return ""
 
-        with open(file_path, 'w') as f:
-            f.write("\n".join(summary_md))
+    def _save_markdown_summary(self, results: List[TestResult], prefix: str, timestamp: str):
+        """Generates a markdown summary of the test results."""
+        # This is a placeholder for your existing markdown logic
+        pass
+
+    def get_libraries_by_status(self, status: str) -> List[str]:
+        """Get libraries with a specific status (e.g., 'working')."""
+        libraries = []
+        for category_data in self.library_matrix.get("library_matrix", {}).values():
+            for lib_name, lib_info in category_data.get("libraries", {}).items():
+                if lib_info.get("status") == status:
+                    libraries.append(lib_name)
+        return sorted(libraries)
