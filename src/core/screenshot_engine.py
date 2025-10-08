@@ -1,11 +1,8 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine (FIXED)
-Enhanced screenshot capture with timeout handling
+STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine
+Enhanced screenshot capture with dynamic content handling
 
-CRITICAL FIX:
-- Disabled font loading wait (causing 30s timeouts)
-- Reduced screenshot timeout from 30s to 10s
-- Better error handling and fallbacks
+REVERTED to original working version with minor improvements
 """
 import logging
 import asyncio
@@ -35,12 +32,9 @@ class ScreenshotEngine:
         page: Any = None
     ) -> Optional[str]:
         """
-        Capture screenshot after waiting for page to fully load (FIXED)
+        Capture screenshot after waiting for page to fully load
         
-        FIXES:
-        - Disabled font loading wait (causing timeouts)
-        - Reduced screenshot timeout to 10s
-        - Multiple fallback strategies
+        REVERTED: Back to simple working approach
         """
         try:
             # Determine if this is a dynamic page needing extra time
@@ -69,80 +63,21 @@ class ScreenshotEngine:
             if page is not None:
                 logger.info(f"Taking screenshot using page object for {library_name}")
                 
-                # NUCLEAR OPTION: Use CDP to disable font rendering completely
+                # REVERTED: Back to simple approach that worked!
                 try:
-                    # Get CDP session
-                    client = await page.context.new_cdp_session(page)
-                    
-                    # Disable font rendering at CDP level
-                    await client.send('Emulation.setDefaultBackgroundColorOverride', {
-                        'color': {'r': 255, 'g': 255, 'b': 255, 'a': 1}
-                    })
-                    
-                    # Disable font downloads
-                    await client.send('Network.setBlockedURLs', {
-                        'urls': [
-                            '*://*/*.woff*',
-                            '*://*/*.ttf*',
-                            '*://*/*.otf*',
-                            '*://*/*.eot*'
-                        ]
-                    })
-                    
-                    logger.info("✅ CDP: Fonts disabled at browser level")
-                    
-                    # Now take screenshot with short timeout
-                    screenshot_bytes = await page.screenshot(
-                        type="png",
-                        timeout=5000  # 5 second max
-                    )
-                    
-                    with open(filepath, 'wb') as f:
-                        f.write(screenshot_bytes)
-                    
-                    logger.info(f"✅ CDP screenshot captured: {filepath}")
-                    
+                    # Try full page first (no timeout parameter = no font wait enforcement!)
+                    await page.screenshot(path=str(filepath), full_page=True)
+                    logger.info(f"✅ Full page screenshot captured: {filepath}")
                 except Exception as e:
-                    logger.warning(f"⚠️ CDP screenshot failed: {str(e)[:100]}")
+                    logger.warning(f"⚠️ Full page screenshot failed: {str(e)[:100]}")
                     
-                    # ABSOLUTE LAST RESORT: Quick viewport screenshot, no waiting
+                    # Fallback: Viewport screenshot
                     try:
-                        logger.info("📸 Taking quick viewport screenshot (no font wait)...")
-                        
-                        # Use screenshot_as_png if available (bypasses font loading)
-                        try:
-                            # Chromium-specific: Use CDP screenshot directly
-                            client = await page.context.new_cdp_session(page)
-                            result = await client.send('Page.captureScreenshot', {
-                                'format': 'png',
-                                'captureBeyondViewport': False
-                            })
-                            
-                            # Decode base64 and save
-                            import base64
-                            screenshot_bytes = base64.b64decode(result['data'])
-                            
-                            with open(filepath, 'wb') as f:
-                                f.write(screenshot_bytes)
-                            
-                            logger.info(f"✅ CDP raw screenshot captured: {filepath}")
-                            
-                        except Exception as cdp_error:
-                            logger.warning(f"CDP direct capture failed: {str(cdp_error)[:80]}")
-                            
-                            # Very last resort: Accept whatever we can get in 2 seconds
-                            screenshot_bytes = await asyncio.wait_for(
-                                page.screenshot(type="png"),
-                                timeout=2.0
-                            )
-                            
-                            with open(filepath, 'wb') as f:
-                                f.write(screenshot_bytes)
-                            
-                            logger.info(f"✅ Emergency 2s screenshot captured: {filepath}")
-                        
-                    except Exception as e3:
-                        logger.error(f"❌ All screenshot methods failed: {str(e3)[:100]}")
+                        logger.info("Trying viewport screenshot...")
+                        await page.screenshot(path=str(filepath))
+                        logger.info(f"✅ Viewport screenshot captured: {filepath}")
+                    except Exception as e2:
+                        logger.error(f"❌ Viewport screenshot also failed: {str(e2)[:100]}")
                         return None
                 
                 # Verify file was created
