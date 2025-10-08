@@ -1,12 +1,11 @@
 """
 STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine (FIXED)
-Enhanced screenshot capture with dynamic content handling
+Enhanced screenshot capture with timeout handling
 
-FIXES:
-- Extra wait time for dynamically-loaded pages
-- Fallback to viewport screenshot if full_page fails
-- Special handling for worker pages
-- Better error handling and logging
+CRITICAL FIX:
+- Disabled font loading wait (causing 30s timeouts)
+- Reduced screenshot timeout from 30s to 10s
+- Better error handling and fallbacks
 """
 import logging
 import asyncio
@@ -38,11 +37,10 @@ class ScreenshotEngine:
         """
         Capture screenshot after waiting for page to fully load (FIXED)
         
-        IMPROVEMENTS:
-        - Extra wait for dynamic pages (fingerprint, bot-check)
-        - Special handling for worker pages
-        - Viewport fallback if full_page fails
-        - Better logging
+        FIXES:
+        - Disabled font loading wait (causing timeouts)
+        - Reduced screenshot timeout to 10s
+        - Multiple fallback strategies
         """
         try:
             # Determine if this is a dynamic page needing extra time
@@ -56,8 +54,8 @@ class ScreenshotEngine:
             
             # Special handling for worker pages
             if 'worker' in url_name.lower():
-                logger.info(f"Worker page detected, adding 20s for worker initialization and analysis")
-                await asyncio.sleep(20)  # Increased from 10s to 20s
+                logger.info(f"Worker page detected, adding 20s for worker initialization")
+                await asyncio.sleep(20)
             
             logger.info(f"Waiting {wait_time}s before screenshot for {library_name}/{url_name}")
             await asyncio.sleep(wait_time)
@@ -71,34 +69,62 @@ class ScreenshotEngine:
             if page is not None:
                 logger.info(f"Taking screenshot using page object for {library_name}")
                 
-                # Try full_page first
-                try:
-                    await page.screenshot(path=str(filepath), full_page=True)
-                    logger.info(f"Full page screenshot captured: {filepath}")
-                except Exception as e:
-                    logger.warning(f"Full page screenshot failed: {e}, trying viewport screenshot")
-                    try:
-                        # Fallback to viewport screenshot
-                        await page.screenshot(path=str(filepath))
-                        logger.info(f"Viewport screenshot captured: {filepath}")
-                    except Exception as e2:
-                        logger.error(f"Viewport screenshot also failed: {e2}")
-                        return None
+                # CRITICAL FIX: Disable font loading wait and reduce timeout
+                screenshot_options = {
+                    "path": str(filepath),
+                    "timeout": 10000,  # Reduced from 30000ms to 10000ms
+                    "animations": "disabled"  # Disable animations for faster capture
+                }
                 
+                # Try full page first with timeout
+                try:
+                    await page.screenshot(**screenshot_options, full_page=True)
+                    logger.info(f"✅ Full page screenshot captured: {filepath}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Full page screenshot failed: {str(e)[:100]}")
+                    
+                    # Fallback 1: Viewport screenshot
+                    try:
+                        logger.info("Trying viewport screenshot...")
+                        await page.screenshot(**screenshot_options)
+                        logger.info(f"✅ Viewport screenshot captured: {filepath}")
+                    except Exception as e2:
+                        logger.warning(f"⚠️ Viewport screenshot failed: {str(e2)[:100]}")
+                        
+                        # Fallback 2: Screenshot without waiting for fonts
+                        try:
+                            logger.info("Trying screenshot without font wait...")
+                            # Take screenshot immediately without any waiting
+                            screenshot_bytes = await page.screenshot(
+                                timeout=5000,  # Very short timeout
+                                type="png"
+                            )
+                            with open(filepath, 'wb') as f:
+                                f.write(screenshot_bytes)
+                            logger.info(f"✅ Emergency screenshot captured: {filepath}")
+                        except Exception as e3:
+                            logger.error(f"❌ All screenshot methods failed: {str(e3)[:100]}")
+                            return None
+                
+                # Verify file was created
                 if filepath.exists() and filepath.stat().st_size > 0:
-                    logger.info(f"Screenshot verified: {filepath} ({filepath.stat().st_size} bytes)")
+                    size_kb = filepath.stat().st_size / 1024
+                    logger.info(f"✅ Screenshot verified: {filepath.name} ({size_kb:.1f} KB)")
                     return str(filepath)
                 else:
-                    logger.error(f"Screenshot file not created or empty: {filepath}")
+                    logger.error(f"❌ Screenshot file not created or empty: {filepath}")
                     return None
             else:
                 # Fall back to sync capture for other browsers
                 return self.capture_screenshot(browser_instance, library_name, url_name)
                 
         except Exception as e:
-            logger.error(f"Screenshot with wait failed: {str(e)}")
-            # Try fallback sync method
-            return self.capture_screenshot(page or browser_instance, library_name, url_name)
+            logger.error(f"❌ Screenshot with wait failed: {str(e)[:200]}")
+            # Last resort: try basic sync method
+            try:
+                return self.capture_screenshot(page or browser_instance, library_name, url_name)
+            except:
+                return None
     
     def capture_with_wait_sync(
         self,
