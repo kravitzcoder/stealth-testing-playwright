@@ -1,15 +1,15 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Playwright Runner (ENHANCED)
-FIXES Worker fingerprinting detection issues
+STEALTH BROWSER TESTING FRAMEWORK - Playwright Runner (COMPLETE)
+Handles all 4 Playwright-based libraries with enhanced worker spoofing
 
 Authors: kravitzcoder & MiniMax Agent
 Repository: https://github.com/kravitzcoder/stealth-testing-playwright
 
-CRITICAL FIXES:
-- Proper Worker/SharedWorker/ServiceWorker spoofing
-- Early route interception BEFORE any script loads
-- Comprehensive navigator property spoofing in workers
-- Canvas fingerprint consistency across contexts
+Libraries supported:
+- playwright (manual stealth)
+- patchright (patched fork)
+- camoufox (Firefox-based)
+- rebrowser_playwright (commercial-grade)
 """
 
 import logging
@@ -29,26 +29,35 @@ logger = logging.getLogger(__name__)
 
 
 class PlaywrightRunner:
-    """Runner for Playwright-based stealth browser libraries with FIXED worker spoofing"""
+    """Runner for Playwright-based stealth browser libraries"""
     
     def __init__(self, screenshot_engine: Optional[ScreenshotEngine] = None):
+        """
+        Initialize Playwright runner
+        
+        Args:
+            screenshot_engine: Screenshot engine instance (optional)
+        """
         self.screenshot_engine = screenshot_engine or ScreenshotEngine()
         self.profile_loader = DeviceProfileLoader()
         
-        # Optional GeoIP support
+        # Optional GeoIP support (graceful degradation if not available)
         self.geoip = None
         try:
             import pygeoip
             geoip_path = Path(__file__).parent.parent.parent / "profiles" / "GeoLiteCity.dat"
             if geoip_path.exists():
                 self.geoip = pygeoip.GeoIP(str(geoip_path))
-                logger.info("✅ GeoIP database loaded")
+                logger.info("✅ GeoIP database loaded for location spoofing")
             else:
-                logger.info("ℹ️ GeoIP database not found (optional)")
-        except:
-            logger.info("ℹ️ pygeoip not available (optional)")
+                logger.info("ℹ️ GeoIP database not found (optional feature)")
+        except ImportError:
+            logger.info("ℹ️ pygeoip not installed (optional feature)")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load GeoIP database: {e}")
         
         logger.info("Playwright runner initialized with ENHANCED worker spoofing")
+        logger.info("🎭 Supported libraries: playwright, patchright, camoufox, rebrowser_playwright")
     
     async def run_test(
         self,
@@ -59,11 +68,25 @@ class PlaywrightRunner:
         mobile_config: Dict[str, Any],
         wait_time: int = 30
     ) -> TestResult:
-        """Run test with proper worker fingerprint spoofing"""
+        """
+        Run test for a Playwright library
+        
+        Args:
+            library_name: Name of library (playwright, patchright, camoufox, rebrowser_playwright)
+            url: Target URL to test
+            url_name: Name of the test
+            proxy_config: Proxy configuration dict
+            mobile_config: Mobile device configuration
+            wait_time: Wait time before screenshot
+        
+        Returns:
+            TestResult object with test results
+        """
         start_time = time.time()
         logger.info(f"🎭 Testing {library_name} on {url_name}: {url}")
         
         try:
+            # Route to appropriate library handler
             if library_name == "playwright":
                 result = await self._run_playwright(
                     url, url_name, proxy_config, mobile_config, wait_time
@@ -74,6 +97,10 @@ class PlaywrightRunner:
                 )
             elif library_name == "camoufox":
                 result = await self._run_camoufox(
+                    url, url_name, proxy_config, mobile_config, wait_time
+                )
+            elif library_name == "rebrowser_playwright":
+                result = await self._run_rebrowser(
                     url, url_name, proxy_config, mobile_config, wait_time
                 )
             else:
@@ -88,7 +115,7 @@ class PlaywrightRunner:
         except Exception as e:
             execution_time = time.time() - start_time
             error_msg = str(e)[:500]
-            logger.error(f"❌ Test failed: {error_msg}")
+            logger.error(f"❌ Test failed for {library_name}/{url_name}: {error_msg}")
             
             return TestResult(
                 library=library_name,
@@ -108,7 +135,7 @@ class PlaywrightRunner:
         mobile_config: Dict[str, Any],
         wait_time: int
     ) -> TestResult:
-        """Run test using native Playwright with ENHANCED worker spoofing"""
+        """Run test using native Playwright with manual stealth"""
         from playwright.async_api import async_playwright
         
         async with async_playwright() as p:
@@ -129,14 +156,11 @@ class PlaywrightRunner:
                 timezone_id=mobile_config.get("timezone", "America/New_York")
             )
             
-            # CRITICAL: Set up route interception BEFORE adding init script
-            # This ensures workers are intercepted from the very first request
+            # Apply enhanced stealth
             await context.route("**/*", lambda route: self._enhanced_worker_interceptor(
                 route, mobile_config
             ))
-            logger.info("✅ Enhanced worker interceptor registered FIRST")
             
-            # Apply comprehensive stealth
             await self._apply_enhanced_stealth(context, mobile_config)
             
             page = await context.new_page()
@@ -144,15 +168,17 @@ class PlaywrightRunner:
             logger.info(f"Navigating to {url}")
             await page.goto(url, wait_until="networkidle", timeout=60000)
             
-            # Extra wait for worker-heavy pages like CreepJS
+            # Extra wait for worker-heavy pages
             if "creepjs" in url.lower() or "worker" in url_name.lower():
                 logger.info("⏳ Extra 15s wait for worker analysis pages")
                 await asyncio.sleep(15)
             
+            # Capture screenshot (may skip if timeout)
             screenshot_path = await self.screenshot_engine.capture_with_wait(
                 page, "playwright", url_name, wait_time, page=page
             )
             
+            # Analyze results
             proxy_working, detected_ip = await self._check_proxy_status(page, proxy_config)
             is_mobile = await self._check_mobile_ua(page, mobile_config)
             
@@ -180,7 +206,7 @@ class PlaywrightRunner:
         mobile_config: Dict[str, Any],
         wait_time: int
     ) -> TestResult:
-        """Run test using Patchright with enhanced worker spoofing"""
+        """Run test using Patchright (patched Playwright fork)"""
         try:
             from patchright.async_api import async_playwright
         except ImportError:
@@ -204,7 +230,6 @@ class PlaywrightRunner:
                 timezone_id=mobile_config.get("timezone", "America/New_York")
             )
             
-            # Apply enhanced worker interception
             await context.route("**/*", lambda route: self._enhanced_worker_interceptor(
                 route, mobile_config
             ))
@@ -217,6 +242,7 @@ class PlaywrightRunner:
             await page.goto(url, wait_until="networkidle", timeout=60000)
             
             if "creepjs" in url.lower() or "worker" in url_name.lower():
+                logger.info("⏳ Extra 15s wait for worker analysis pages")
                 await asyncio.sleep(15)
             
             screenshot_path = await self.screenshot_engine.capture_with_wait(
@@ -250,12 +276,13 @@ class PlaywrightRunner:
         mobile_config: Dict[str, Any],
         wait_time: int
     ) -> TestResult:
-        """Run test using Camoufox (Firefox-based)"""
+        """Run test using Camoufox (Firefox-based stealth browser)"""
         try:
             from camoufox.async_api import AsyncCamoufox
         except ImportError:
             raise ImportError("camoufox not installed. Run: pip install 'camoufox[geoip]'")
         
+        # Build proxy configuration for Camoufox
         proxy_dict = None
         if proxy_config.get("host"):
             proxy_dict = {
@@ -284,6 +311,7 @@ class PlaywrightRunner:
             await page.goto(url, wait_until="networkidle", timeout=60000)
             
             if "creepjs" in url.lower() or "worker" in url_name.lower():
+                logger.info("⏳ Extra 15s wait for worker analysis pages")
                 await asyncio.sleep(15)
             
             screenshot_path = await self.screenshot_engine.capture_with_wait(
@@ -309,13 +337,82 @@ class PlaywrightRunner:
                 execution_time=0
             )
     
+    async def _run_rebrowser(
+        self,
+        url: str,
+        url_name: str,
+        proxy_config: Dict[str, str],
+        mobile_config: Dict[str, Any],
+        wait_time: int
+    ) -> TestResult:
+        """Run test using Rebrowser Playwright (commercial-grade stealth)"""
+        try:
+            from rebrowser_playwright.async_api import async_playwright
+        except ImportError:
+            raise ImportError("rebrowser-playwright not installed. Run: pip install rebrowser-playwright")
+        
+        async with async_playwright() as p:
+            proxy_url = self._build_proxy_url(proxy_config)
+            
+            # Rebrowser has built-in stealth, but we still apply manual techniques
+            browser = await p.chromium.launch(
+                headless=True,
+                proxy={"server": proxy_url} if proxy_url else None
+            )
+            
+            context = await browser.new_context(
+                user_agent=mobile_config.get("user_agent"),
+                viewport=mobile_config.get("viewport"),
+                device_scale_factor=mobile_config.get("device_scale_factor", 2),
+                is_mobile=mobile_config.get("is_mobile", True),
+                has_touch=mobile_config.get("has_touch", True),
+                locale=mobile_config.get("language", "en-US").replace("_", "-"),
+                timezone_id=mobile_config.get("timezone", "America/New_York")
+            )
+            
+            # Apply enhanced worker interception (on top of Rebrowser's built-in stealth)
+            await context.route("**/*", lambda route: self._enhanced_worker_interceptor(
+                route, mobile_config
+            ))
+            
+            await self._apply_enhanced_stealth(context, mobile_config)
+            
+            page = await context.new_page()
+            
+            logger.info(f"Navigating to {url} with Rebrowser Playwright")
+            await page.goto(url, wait_until="networkidle", timeout=60000)
+            
+            if "creepjs" in url.lower() or "worker" in url_name.lower():
+                logger.info("⏳ Extra 15s wait for worker analysis pages")
+                await asyncio.sleep(15)
+            
+            screenshot_path = await self.screenshot_engine.capture_with_wait(
+                page, "rebrowser_playwright", url_name, wait_time, page=page
+            )
+            
+            proxy_working, detected_ip = await self._check_proxy_status(page, proxy_config)
+            is_mobile = await self._check_mobile_ua(page, mobile_config)
+            
+            await browser.close()
+            
+            return TestResult(
+                library="rebrowser_playwright",
+                category="playwright",
+                test_name=url_name,
+                url=url,
+                success=True,
+                detected_ip=detected_ip,
+                user_agent=mobile_config.get("user_agent"),
+                proxy_working=proxy_working,
+                is_mobile_ua=is_mobile,
+                screenshot_path=screenshot_path,
+                execution_time=0
+            )
+    
     async def _apply_enhanced_stealth(self, context, mobile_config: Dict[str, Any]) -> None:
         """Apply comprehensive stealth techniques"""
         
-        # Generate base fingerprint script
-        fingerprint_script = generate_fingerprint_script(mobile_config)
-        
-        # Add ENHANCED init script with proper worker handling
+        # Generate enhanced init script with proper worker handling
         enhanced_script = self._generate_enhanced_init_script(mobile_config)
         
         await context.add_init_script(enhanced_script)
@@ -357,7 +454,6 @@ class PlaywrightRunner:
     // Apply navigator spoofing
     if (typeof navigator !== 'undefined') {{
         try {{
-            // Use Object.defineProperty with configurable: true to avoid errors
             Object.defineProperty(navigator, 'userAgent', {{
                 get: () => spoofedProperties.userAgent,
                 configurable: true
@@ -402,18 +498,6 @@ class PlaywrightRunner:
         }}
     }}
     
-    // Worker-specific: Intercept Worker constructor to inject this script into new workers
-    if (!isWorker && typeof Worker !== 'undefined') {{
-        const OriginalWorker = Worker;
-        Worker = class extends OriginalWorker {{
-            constructor(scriptURL, options) {{
-                console.log('[Stealth] Intercepting Worker creation:', scriptURL);
-                // Worker scripts are handled by route interception
-                super(scriptURL, options);
-            }}
-        }};
-    }}
-    
     // Spoof canvas fingerprint consistency
     if (typeof CanvasRenderingContext2D !== 'undefined') {{
         const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
@@ -442,7 +526,7 @@ class PlaywrightRunner:
                     "worker" in request.url.lower() or
                     request.header_value("sec-fetch-dest") in ["worker", "sharedworker", "serviceworker"] or
                     request.url.endswith(".worker.js") or
-                    "creepjs" in request.url.lower()  # CreepJS loads workers
+                    "creepjs" in request.url.lower()
                 )
             )
             
@@ -459,7 +543,7 @@ class PlaywrightRunner:
                 # Prepend spoofing to original script
                 modified_body = worker_spoof_script + "\n\n// === Original Worker Script ===\n\n" + original_body
                 
-                # Remove encoding headers to avoid decompression issues
+                # Remove encoding headers
                 headers = {k: v for k, v in response.headers.items() 
                           if k.lower() not in ['content-encoding', 'content-length']}
                 
@@ -473,7 +557,6 @@ class PlaywrightRunner:
                 return
         
         except Exception as e:
-            # Don't fail the entire request if interception has issues
             if "Target closed" not in str(e):
                 logger.debug(f"Worker interception warning: {e}")
         
@@ -484,7 +567,7 @@ class PlaywrightRunner:
         """Check if proxy is working"""
         try:
             content = await page.content()
-            ip_pattern = r'\b\d{{1,3}}\.\d{{1,3}}\.\d{{1,3}}\.\d{{1,3}}\b'
+            ip_pattern = r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
             found_ips = re.findall(ip_pattern, content)
             
             if not found_ips:
