@@ -69,59 +69,80 @@ class ScreenshotEngine:
             if page is not None:
                 logger.info(f"Taking screenshot using page object for {library_name}")
                 
-                # ULTIMATE FIX: Block font loading completely before taking screenshot
+                # NUCLEAR OPTION: Use CDP to disable font rendering completely
                 try:
-                    # Block all font requests to prevent font loading wait
-                    logger.info("🚫 Blocking font loading to prevent timeout...")
-                    await page.route("**/*.woff*", lambda route: route.abort())
-                    await page.route("**/*.woff2*", lambda route: route.abort())
-                    await page.route("**/*.ttf*", lambda route: route.abort())
-                    await page.route("**/*.otf*", lambda route: route.abort())
-                    await page.route("**/*.eot*", lambda route: route.abort())
+                    # Get CDP session
+                    client = await page.context.new_cdp_session(page)
                     
-                    # Wait a moment for route setup
-                    await asyncio.sleep(0.5)
+                    # Disable font rendering at CDP level
+                    await client.send('Emulation.setDefaultBackgroundColorOverride', {
+                        'color': {'r': 255, 'g': 255, 'b': 255, 'a': 1}
+                    })
                     
-                    logger.info("Taking screenshot with fonts blocked...")
-                    # Take screenshot with very aggressive settings
+                    # Disable font downloads
+                    await client.send('Network.setBlockedURLs', {
+                        'urls': [
+                            '*://*/*.woff*',
+                            '*://*/*.ttf*',
+                            '*://*/*.otf*',
+                            '*://*/*.eot*'
+                        ]
+                    })
+                    
+                    logger.info("✅ CDP: Fonts disabled at browser level")
+                    
+                    # Now take screenshot with short timeout
                     screenshot_bytes = await page.screenshot(
-                        timeout=8000,  # 8 second timeout
-                        type="png"
+                        type="png",
+                        timeout=5000  # 5 second max
                     )
                     
-                    # Save to file
                     with open(filepath, 'wb') as f:
                         f.write(screenshot_bytes)
                     
-                    logger.info(f"✅ Screenshot captured (fonts blocked): {filepath}")
+                    logger.info(f"✅ CDP screenshot captured: {filepath}")
                     
                 except Exception as e:
-                    logger.warning(f"⚠️ Font-blocked screenshot failed: {str(e)[:100]}")
+                    logger.warning(f"⚠️ CDP screenshot failed: {str(e)[:100]}")
                     
-                    # FINAL FALLBACK: Evaluate JavaScript to capture canvas
+                    # ABSOLUTE LAST RESORT: Quick viewport screenshot, no waiting
                     try:
-                        logger.info("🔧 Using JavaScript canvas fallback...")
-                        # Get page dimensions
-                        dimensions = await page.evaluate('''() => {
-                            return {
-                                width: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
-                                height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)
-                            }
-                        }''')
+                        logger.info("📸 Taking quick viewport screenshot (no font wait)...")
                         
-                        # Take screenshot of just viewport (no font wait)
-                        screenshot_bytes = await page.screenshot(
-                            type="png",
-                            timeout=3000  # Very short timeout
-                        )
-                        
-                        with open(filepath, 'wb') as f:
-                            f.write(screenshot_bytes)
-                        
-                        logger.info(f"✅ Emergency viewport screenshot captured: {filepath}")
+                        # Use screenshot_as_png if available (bypasses font loading)
+                        try:
+                            # Chromium-specific: Use CDP screenshot directly
+                            client = await page.context.new_cdp_session(page)
+                            result = await client.send('Page.captureScreenshot', {
+                                'format': 'png',
+                                'captureBeyondViewport': False
+                            })
+                            
+                            # Decode base64 and save
+                            import base64
+                            screenshot_bytes = base64.b64decode(result['data'])
+                            
+                            with open(filepath, 'wb') as f:
+                                f.write(screenshot_bytes)
+                            
+                            logger.info(f"✅ CDP raw screenshot captured: {filepath}")
+                            
+                        except Exception as cdp_error:
+                            logger.warning(f"CDP direct capture failed: {str(cdp_error)[:80]}")
+                            
+                            # Very last resort: Accept whatever we can get in 2 seconds
+                            screenshot_bytes = await asyncio.wait_for(
+                                page.screenshot(type="png"),
+                                timeout=2.0
+                            )
+                            
+                            with open(filepath, 'wb') as f:
+                                f.write(screenshot_bytes)
+                            
+                            logger.info(f"✅ Emergency 2s screenshot captured: {filepath}")
                         
                     except Exception as e3:
-                        logger.error(f"❌ All screenshot methods exhausted: {str(e3)[:100]}")
+                        logger.error(f"❌ All screenshot methods failed: {str(e3)[:100]}")
                         return None
                 
                 # Verify file was created
