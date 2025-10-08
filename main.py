@@ -35,11 +35,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Playwright-specific libraries (FIXED: 3 only, no playwright_stealth)
+# Playwright-specific libraries (4 total)
 PLAYWRIGHT_LIBRARIES = [
     "playwright",
     "patchright",
-    "camoufox"
+    "camoufox",
+    "rebrowser_playwright"
 ]
 
 class PlaywrightTestCLI:
