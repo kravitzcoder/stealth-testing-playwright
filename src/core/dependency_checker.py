@@ -15,20 +15,21 @@ from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Library dependency mapping (FIXED: removed playwright_stealth)
+# Library dependency mapping
 LIBRARY_DEPENDENCIES = {
     "playwright": ["playwright"],
     "patchright": ["patchright"],
     "camoufox": ["camoufox"],
+    "rebrowser_playwright": ["rebrowser_playwright"]  # ← ADDED
 }
 
 # Critical version requirements
 VERSION_REQUIREMENTS = {
     "playwright": "1.40.0",
     "patchright": "1.0.0",
-    "camoufox": "0.3.0"
+    "camoufox": "0.3.0",
+    "rebrowser_playwright": "1.0.0"  # ← ADDED
 }
-
 
 class DependencyChecker:
     """Check and verify library dependencies"""
