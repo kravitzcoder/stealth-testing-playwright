@@ -11,6 +11,7 @@ on:
           - playwright
           - patchright
           - camoufox
+          - rebrowser_playwright  # ← ADDED
       device:
         description: 'Mobile device to emulate'
         required: false
@@ -91,12 +92,18 @@ jobs:
             pip install 'camoufox[geoip]' pygeoip
             python -c "import camoufox; print('✅ Camoufox verified')"
             ;;
-            
+        
+          "rebrowser_playwright")  # ← ADDED
+            pip install rebrowser-playwright
+            rebrowser-playwright install chromium
+            python -c "from rebrowser_playwright.async_api import async_playwright; print('✅ Rebrowser verified')"
+            ;;
+        
           *)
             echo "❌ Unknown library: ${{ inputs.library }}"
             exit 1
             ;;
-        esac
+     esac
         
         echo "✅ Library-specific dependencies installed"
     
