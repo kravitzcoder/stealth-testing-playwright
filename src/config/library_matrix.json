@@ -32,6 +32,16 @@
           "priority": 2,
           "installation_command": "pip install camoufox[geoip]",
           "description": "Firefox-based stealth browser with Playwright API and GeoIP spoofing"
+        },
+        "rebrowser_playwright": {
+          "name": "rebrowser_playwright",
+          "display_name": "Rebrowser Playwright",
+          "category": "playwright",
+          "proxy_auth_support": "native",
+          "status": "working",
+          "priority": 1,
+          "installation_command": "pip install rebrowser-playwright && rebrowser-playwright install chromium",
+          "description": "Commercial-grade Playwright fork with advanced anti-detection patches"
         }
       }
     }
