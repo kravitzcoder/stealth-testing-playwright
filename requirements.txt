@@ -1,11 +1,10 @@
-# Playwright Stealth Testing Framework - Python Dependencies (FIXED)
+# Playwright Stealth Testing Framework - Python Dependencies
 
-# Core Playwright Libraries
+# Core Playwright Libraries (4 total)
 playwright>=1.40.0
-# playwright-stealth REMOVED - buggy v1.0.6 breaks page JavaScript with undefined 'opts'
-# Manual spoofing is more comprehensive anyway
 patchright>=1.0.0
-camoufox[geoip]>=0.3.0  # FIXED: Added geoip support
+camoufox[geoip]>=0.3.0
+rebrowser-playwright>=1.0.0  # ← ADDED
 pygeoip>=0.3.2
 
 # Async utilities
