@@ -69,42 +69,60 @@ class ScreenshotEngine:
             if page is not None:
                 logger.info(f"Taking screenshot using page object for {library_name}")
                 
-                # CRITICAL FIX: Disable font loading wait and reduce timeout
-                screenshot_options = {
-                    "path": str(filepath),
-                    "timeout": 10000,  # Reduced from 30000ms to 10000ms
-                    "animations": "disabled"  # Disable animations for faster capture
-                }
-                
-                # Try full page first with timeout
+                # ULTIMATE FIX: Block font loading completely before taking screenshot
                 try:
-                    await page.screenshot(**screenshot_options, full_page=True)
-                    logger.info(f"✅ Full page screenshot captured: {filepath}")
-                except Exception as e:
-                    logger.warning(f"⚠️ Full page screenshot failed: {str(e)[:100]}")
+                    # Block all font requests to prevent font loading wait
+                    logger.info("🚫 Blocking font loading to prevent timeout...")
+                    await page.route("**/*.woff*", lambda route: route.abort())
+                    await page.route("**/*.woff2*", lambda route: route.abort())
+                    await page.route("**/*.ttf*", lambda route: route.abort())
+                    await page.route("**/*.otf*", lambda route: route.abort())
+                    await page.route("**/*.eot*", lambda route: route.abort())
                     
-                    # Fallback 1: Viewport screenshot
+                    # Wait a moment for route setup
+                    await asyncio.sleep(0.5)
+                    
+                    logger.info("Taking screenshot with fonts blocked...")
+                    # Take screenshot with very aggressive settings
+                    screenshot_bytes = await page.screenshot(
+                        timeout=8000,  # 8 second timeout
+                        type="png"
+                    )
+                    
+                    # Save to file
+                    with open(filepath, 'wb') as f:
+                        f.write(screenshot_bytes)
+                    
+                    logger.info(f"✅ Screenshot captured (fonts blocked): {filepath}")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Font-blocked screenshot failed: {str(e)[:100]}")
+                    
+                    # FINAL FALLBACK: Evaluate JavaScript to capture canvas
                     try:
-                        logger.info("Trying viewport screenshot...")
-                        await page.screenshot(**screenshot_options)
-                        logger.info(f"✅ Viewport screenshot captured: {filepath}")
-                    except Exception as e2:
-                        logger.warning(f"⚠️ Viewport screenshot failed: {str(e2)[:100]}")
+                        logger.info("🔧 Using JavaScript canvas fallback...")
+                        # Get page dimensions
+                        dimensions = await page.evaluate('''() => {
+                            return {
+                                width: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+                                height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)
+                            }
+                        }''')
                         
-                        # Fallback 2: Screenshot without waiting for fonts
-                        try:
-                            logger.info("Trying screenshot without font wait...")
-                            # Take screenshot immediately without any waiting
-                            screenshot_bytes = await page.screenshot(
-                                timeout=5000,  # Very short timeout
-                                type="png"
-                            )
-                            with open(filepath, 'wb') as f:
-                                f.write(screenshot_bytes)
-                            logger.info(f"✅ Emergency screenshot captured: {filepath}")
-                        except Exception as e3:
-                            logger.error(f"❌ All screenshot methods failed: {str(e3)[:100]}")
-                            return None
+                        # Take screenshot of just viewport (no font wait)
+                        screenshot_bytes = await page.screenshot(
+                            type="png",
+                            timeout=3000  # Very short timeout
+                        )
+                        
+                        with open(filepath, 'wb') as f:
+                            f.write(screenshot_bytes)
+                        
+                        logger.info(f"✅ Emergency viewport screenshot captured: {filepath}")
+                        
+                    except Exception as e3:
+                        logger.error(f"❌ All screenshot methods exhausted: {str(e3)[:100]}")
+                        return None
                 
                 # Verify file was created
                 if filepath.exists() and filepath.stat().st_size > 0:
