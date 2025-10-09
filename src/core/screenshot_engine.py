@@ -1,8 +1,10 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine (FIXED)
-Immediate screenshot capture without font loading delays
+STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine (COMPLETE FIXED)
+Intelligent screenshot capture with proper wait times for heavy pages
 
-Authors: kravitzcoder & MiniMax Agent
+Authors: kravitzcoder & Claude
+
+CRITICAL FIX: Increased wait times for pixelscan.net and other heavy detection sites
 """
 import logging
 import asyncio
@@ -28,32 +30,42 @@ class ScreenshotEngine:
         browser_instance: Any, 
         library_name: str, 
         url_name: str,
-        wait_time: int = 15,  # Reduced from 30 to 15 seconds
+        wait_time: int = 30,  # Default 30 seconds
         page: Any = None
     ) -> Optional[str]:
         """
-        Capture screenshot with minimal wait - stealth should work immediately
+        Capture screenshot with intelligent wait times
         
-        FIXED: No more font wait timeouts, immediate capture approach
+        FIXED: Proper wait times for heavy pages like pixelscan.net
         """
         try:
-            # Minimal intelligent wait based on page type
+            # Intelligent wait configuration for different page types
             wait_config = {
-                'creepjs': 8,      # Needs slightly more for worker analysis
-                'workers': 8,      # Worker initialization
-                'fingerprint': 15,  # Standard wait
-                'bot-check': 5,    # Standard wait
-                'ip': 15            # Quick page
+                'pixelscan': 35,     # Pixelscan needs LONG time (30-45s)
+                'fingerprint': 35,   # Fingerprint analysis is heavy
+                'ip_check': 30,      # IP check with WebRTC analysis
+                'bot_check': 30,     # Bot detection analysis
+                'creepjs': 25,       # CreepJS analysis
+                'workers': 25,       # Worker analysis
+                'ip': 30,            # Generic IP check
             }
             
-            for keyword, wait in wait_config.items():
-                if keyword in url_name.lower():
-                    wait_time = wait
-                    logger.info(f"Using {wait}s wait for {url_name}")
-                    break
+            # Determine wait time based on URL/test name
+            determined_wait = wait_time  # Default from parameter
             
-            # Wait for the specified time
-            await asyncio.sleep(wait_time)
+            for keyword, configured_wait in wait_config.items():
+                if keyword in url_name.lower():
+                    determined_wait = configured_wait
+                    logger.info(f"⏱️ Using {configured_wait}s wait for {url_name} (detected: {keyword})")
+                    break
+            else:
+                # No keyword matched, use default
+                logger.info(f"⏱️ Using default {determined_wait}s wait for {url_name}")
+            
+            # CRITICAL: Wait for the page to fully load
+            logger.info(f"⏳ Waiting {determined_wait} seconds for page to complete...")
+            await asyncio.sleep(determined_wait)
+            logger.info(f"✅ Wait complete, now capturing screenshot")
             
             # Generate filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
@@ -62,85 +74,32 @@ class ScreenshotEngine:
             
             # Use page object if provided (Playwright case)
             if page is not None:
-                logger.info(f"Taking immediate screenshot for {library_name}")
+                logger.info(f"📸 Taking screenshot for {library_name}/{url_name}")
                 
-                # Method 1: Force immediate screenshot without waiting for fonts
-                try:
-                    # Inject script to mark fonts as loaded immediately
-                    await page.evaluate("""
-                        // Force font ready state
-                        if (document.fonts && document.fonts.ready) {
-                            document.fonts.ready = Promise.resolve();
-                        }
-                        // Remove any custom fonts to avoid loading delays
-                        document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
-                            if (link.href.includes('font')) {
-                                link.remove();
-                            }
-                        });
-                    """)
-                    
-                    # Take screenshot with very short timeout
-                    await page.screenshot(
-                        path=str(filepath),
-                        full_page=True,
-                        timeout=3000,  # 3 second timeout max
-                        animations='disabled'
-                    )
-                    
-                    if filepath.exists() and filepath.stat().st_size > 1000:
-                        size_kb = filepath.stat().st_size / 1024
-                        logger.info(f"✅ Screenshot captured: {filepath.name} ({size_kb:.1f} KB)")
-                        return str(filepath)
-                    
-                except Exception as e:
-                    logger.debug(f"Full page screenshot attempt failed: {str(e)[:100]}")
+                # Try multiple screenshot methods in order
+                screenshot_methods = [
+                    ("full_page", self._capture_full_page),
+                    ("viewport", self._capture_viewport),
+                    ("element", self._capture_element),
+                    ("binary", self._capture_binary)
+                ]
                 
-                # Method 2: Viewport screenshot (faster, no full page)
-                try:
-                    await page.screenshot(
-                        path=str(filepath),
-                        full_page=False,  # Just viewport
-                        timeout=2000
-                    )
-                    
-                    if filepath.exists() and filepath.stat().st_size > 1000:
-                        size_kb = filepath.stat().st_size / 1024
-                        logger.info(f"✅ Viewport screenshot captured: {filepath.name} ({size_kb:.1f} KB)")
-                        return str(filepath)
+                for method_name, method_func in screenshot_methods:
+                    try:
+                        logger.debug(f"Trying screenshot method: {method_name}")
                         
-                except Exception as e:
-                    logger.debug(f"Viewport screenshot failed: {str(e)[:100]}")
-                
-                # Method 3: Element screenshot of main content
-                try:
-                    # Try to find main content area
-                    main_element = await page.query_selector('main') or \
-                                   await page.query_selector('body') or \
-                                   await page.query_selector('html')
-                    
-                    if main_element:
-                        await main_element.screenshot(path=str(filepath), timeout=2000)
+                        if await method_func(page, filepath):
+                            if filepath.exists() and filepath.stat().st_size > 1000:
+                                size_kb = filepath.stat().st_size / 1024
+                                logger.info(f"✅ Screenshot captured via {method_name}: {filepath.name} ({size_kb:.1f} KB)")
+                                return str(filepath)
                         
-                        if filepath.exists() and filepath.stat().st_size > 1000:
-                            logger.info(f"✅ Element screenshot captured: {filepath.name}")
-                            return str(filepath)
-                            
-                except Exception as e:
-                    logger.debug(f"Element screenshot failed: {str(e)[:100]}")
+                    except Exception as e:
+                        logger.debug(f"{method_name} failed: {str(e)[:100]}")
+                        continue
                 
-                # Method 4: Base64 screenshot (last resort)
-                try:
-                    screenshot_bytes = await page.screenshot(timeout=1000, full_page=False)
-                    with open(filepath, 'wb') as f:
-                        f.write(screenshot_bytes)
-                    logger.info(f"✅ Binary screenshot captured: {filepath.name}")
-                    return str(filepath)
-                    
-                except Exception as e:
-                    logger.warning(f"All screenshot methods failed for {library_name}/{url_name}")
-                    # Return None but don't fail the test
-                    return None
+                logger.warning(f"⚠️ All screenshot methods failed for {library_name}/{url_name}")
+                return None
                     
             else:
                 # Fall back to sync capture for other browsers
@@ -148,25 +107,96 @@ class ScreenshotEngine:
                 
         except Exception as e:
             logger.error(f"Screenshot capture error: {str(e)[:200]}")
-            # Don't fail the test due to screenshot issues
             return None
+    
+    async def _capture_full_page(self, page, filepath: Path) -> bool:
+        """Method 1: Full page screenshot with font fix"""
+        try:
+            # Force fonts to be ready immediately
+            await page.evaluate("""
+                if (document.fonts && document.fonts.ready) {
+                    document.fonts.ready = Promise.resolve();
+                }
+                document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+                    if (link.href.includes('font')) {
+                        link.remove();
+                    }
+                });
+            """)
+            
+            await page.screenshot(
+                path=str(filepath),
+                full_page=True,
+                timeout=5000,  # 5 second timeout
+                animations='disabled'
+            )
+            return True
+            
+        except Exception as e:
+            logger.debug(f"Full page screenshot failed: {str(e)[:100]}")
+            return False
+    
+    async def _capture_viewport(self, page, filepath: Path) -> bool:
+        """Method 2: Viewport screenshot (faster)"""
+        try:
+            await page.screenshot(
+                path=str(filepath),
+                full_page=False,
+                timeout=3000  # 3 second timeout
+            )
+            return True
+            
+        except Exception as e:
+            logger.debug(f"Viewport screenshot failed: {str(e)[:100]}")
+            return False
+    
+    async def _capture_element(self, page, filepath: Path) -> bool:
+        """Method 3: Element screenshot of main content"""
+        try:
+            # Try to find main content area
+            main_element = await page.query_selector('main') or \
+                           await page.query_selector('body') or \
+                           await page.query_selector('html')
+            
+            if main_element:
+                await main_element.screenshot(path=str(filepath), timeout=3000)
+                return True
+            return False
+                        
+        except Exception as e:
+            logger.debug(f"Element screenshot failed: {str(e)[:100]}")
+            return False
+    
+    async def _capture_binary(self, page, filepath: Path) -> bool:
+        """Method 4: Binary screenshot (last resort)"""
+        try:
+            screenshot_bytes = await page.screenshot(timeout=2000, full_page=False)
+            with open(filepath, 'wb') as f:
+                f.write(screenshot_bytes)
+            return True
+            
+        except Exception as e:
+            logger.debug(f"Binary screenshot failed: {str(e)[:100]}")
+            return False
     
     def capture_with_wait_sync(
         self,
         driver: Any,
         library_name: str,
         url_name: str,
-        wait_time: int = 5  # Reduced from 30
+        wait_time: int = 30
     ) -> Optional[str]:
-        """Capture screenshot after minimal wait (sync version for Selenium)"""
+        """Capture screenshot after wait (sync version for Selenium)"""
         try:
             # Intelligent wait based on page
             wait_config = {
-                'creepjs': 8,
-                'workers': 8,
-                'fingerprint': 15,
-                'bot-check': 5,
-                'ip': 15
+                'pixelscan': 35,
+                'fingerprint': 35,
+                'ip_check': 30,
+                'bot_check': 30,
+                'creepjs': 25,
+                'workers': 25,
+                'ip': 30,
             }
             
             for keyword, wait in wait_config.items():
