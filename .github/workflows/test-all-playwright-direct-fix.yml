@@ -109,7 +109,15 @@ jobs:
         PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
         PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
       run: |
-        python main.py --libraries playwright,patchright,camoufox,rebrowser_playwright
+        # Construct proxy URL from environment variables
+        if [ -n "$PROXY_USERNAME" ] && [ -n "$PROXY_PASSWORD" ]; then
+          PROXY_URL="http://$PROXY_USERNAME:$PROXY_PASSWORD@${HTTP_PROXY#http://}"
+        else
+          PROXY_URL="$HTTP_PROXY"
+        fi
+        
+        echo "Using proxy: ${PROXY_URL%:*}:***" # Hide password in logs
+        python main.py --proxy "$PROXY_URL" --all
         
     - name: Upload test results
       uses: actions/upload-artifact@v4
