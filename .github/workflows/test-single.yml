@@ -21,7 +21,7 @@ on:
 jobs:
   test-single-library:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     
     steps:
       - name: 📥 Checkout Repository
@@ -32,12 +32,6 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      
-      - name: 🟢 Set up Node.js (for rebrowser)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-        if: inputs.library == 'rebrowser_playwright'
       
       - name: 🖥️ Install System Dependencies
         run: |
@@ -102,43 +96,27 @@ jobs:
               echo "=== Installing rebrowser-playwright ==="
               echo "=========================================="
               
-              # Install Python package
-              echo "Installing Python package..."
+              # SIMPLE FIX: Install playwright first for browser
+              # rebrowser-playwright and playwright share the same browser cache
+              
+              echo "Step 1: Installing playwright (for browser)..."
+              pip install playwright
+              
+              echo "Step 2: Installing rebrowser-playwright..."
               pip install rebrowser-playwright
               
-              # Verify import
-              echo "Verifying import..."
-              python -c "from rebrowser_playwright.async_api import async_playwright; print('✅ Import OK')"
+              echo "Step 3: Downloading Chromium browser..."
+              playwright install chromium
+              playwright install-deps chromium
               
-              # Install browser - try multiple methods
-              echo "Installing Chromium browser..."
+              echo "Step 4: Verifying installations..."
+              python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright OK')"
+              python -c "from rebrowser_playwright.async_api import async_playwright; print('✅ Rebrowser OK')"
               
-              # Method 1: Standard playwright install (shares cache)
-              echo "Method 1: Standard playwright install..."
-              if playwright install chromium; then
-                echo "✅ Method 1 succeeded"
-              else
-                echo "⚠️ Method 1 failed, trying Method 2..."
-                
-                # Method 2: Using python module
-                echo "Method 2: Python module install..."
-                if python -m rebrowser_playwright install chromium; then
-                  echo "✅ Method 2 succeeded"
-                else
-                  echo "⚠️ Method 2 failed, trying Method 3..."
-                  
-                  # Method 3: NPX install
-                  echo "Method 3: NPX install..."
-                  if npx --yes rebrowser-playwright@latest install chromium; then
-                    echo "✅ Method 3 succeeded"
-                  else
-                    echo "⚠️ All install methods tried"
-                    echo "Browser will download on first run (this is OK)"
-                  fi
-                fi
-              fi
-              
+              echo "=========================================="
               echo "✅ rebrowser-playwright setup complete"
+              echo "Both packages share browser at ~/.cache/ms-playwright"
+              echo "=========================================="
               ;;
           
             *)
@@ -169,13 +147,7 @@ jobs:
           echo "Running: $CMD"
           echo "=========================================="
           
-          # Run with timeout
-          if [ "${{ inputs.library }}" = "rebrowser_playwright" ]; then
-            echo "⚠️ First run may take extra time to download browser..."
-            timeout 600 $CMD
-          else
-            $CMD
-          fi
+          $CMD
       
       - name: 📊 Display Results Summary
         if: always()
