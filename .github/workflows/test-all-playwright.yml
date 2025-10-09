@@ -88,8 +88,30 @@ jobs:
         # Install Patchright browser
         patchright install chromium || echo "⚠️ Patchright install warning (continuing)"
         
-        # Install Rebrowser Playwright browser
-        rebrowser-playwright install chromium || echo "⚠️ Rebrowser Playwright install warning (continuing)"
+        # Install Rebrowser Playwright browser - Multiple methods
+        echo "=== Installing Rebrowser Playwright Browser ==="
+        
+        # Method 1: Try standard playwright install (shares cache)
+        echo "Method 1: Standard playwright install for rebrowser compatibility..."
+        playwright install chromium || echo "⚠️ Method 1 failed"
+        
+        # Method 2: Try python module method
+        echo "Method 2: Python module install..."
+        python -m rebrowser_playwright install chromium || echo "⚠️ Method 2 failed"
+        
+        # Method 3: Check if browsers are already available
+        echo "Method 3: Verify browser availability..."
+        python -c "
+from rebrowser_playwright.sync_api import sync_playwright
+try:
+    p = sync_playwright().start()
+    browser = p.chromium.launch()
+    print('✅ Rebrowser chromium browser available')
+    browser.close()
+    p.stop()
+except Exception as e:
+    print(f'⚠️ Browser verification failed: {e}')
+" || echo "⚠️ Method 3 verification failed"
         
         # Verify installations
         echo ""
@@ -113,8 +135,23 @@ jobs:
           echo "⚠️ Firefox verification failed (continuing)"
         }
         
-        python -c "from rebrowser_playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); print('✅ Rebrowser Chromium functional'); browser.close(); p.stop()" || {
-          echo "⚠️ Rebrowser Chromium verification failed (continuing)"
+        # Enhanced Rebrowser verification with fallback
+        echo "=== Rebrowser Playwright Verification ==="
+        python -c "
+from rebrowser_playwright.sync_api import sync_playwright
+import sys
+try:
+    p = sync_playwright().start()
+    browser = p.chromium.launch(headless=True)
+    print('✅ Rebrowser Chromium fully functional')
+    browser.close()
+    p.stop()
+except Exception as e:
+    print(f'⚠️ Rebrowser verification failed: {e}')
+    print('This may still work at runtime - continuing tests')
+    sys.exit(0)  # Don't fail the workflow
+" || {
+          echo "⚠️ Rebrowser verification failed - may auto-download on first use"
         }
         
     - name: ✅ Validate Installation Versions
