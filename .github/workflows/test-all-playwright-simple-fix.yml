@@ -53,36 +53,40 @@ jobs:
         echo "Browser cache contents:"
         ls -la ~/.cache/ms-playwright/ || echo "No browser cache found"
 
-    - name: Test browser launches
+    - name: Create browser test script
       run: |
-        python -c "
-import asyncio
+        cat > test_browsers.py << 'EOF'
+        import asyncio
 
-async def test_browsers():
-    tests = [
-        ('playwright', 'from playwright.async_api import async_playwright'),
-        ('rebrowser_playwright', 'from rebrowser_playwright.async_api import async_playwright'),
-        ('patchright', 'from patchright.async_api import async_playwright')
-    ]
-    
-    for name, import_cmd in tests:
-        try:
-            print(f'Testing {name}...')
-            local_vars = {}
-            exec(import_cmd, globals(), local_vars)
-            async_playwright = local_vars.get('async_playwright') or globals().get('async_playwright')
+        async def test_browsers():
+            tests = [
+                ('playwright', 'from playwright.async_api import async_playwright'),
+                ('rebrowser_playwright', 'from rebrowser_playwright.async_api import async_playwright'),
+                ('patchright', 'from patchright.async_api import async_playwright')
+            ]
             
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
-                await page.goto('about:blank')
-                print(f'✅ {name}: SUCCESS')
-                await browser.close()
-        except Exception as e:
-            print(f'❌ {name}: FAILED - {str(e)[:100]}')
+            for name, import_cmd in tests:
+                try:
+                    print(f'Testing {name}...')
+                    local_vars = {}
+                    exec(import_cmd, globals(), local_vars)
+                    async_playwright = local_vars.get('async_playwright') or globals().get('async_playwright')
+                    
+                    async with async_playwright() as p:
+                        browser = await p.chromium.launch(headless=True)
+                        page = await browser.new_page()
+                        await page.goto('about:blank')
+                        print(f'✅ {name}: SUCCESS')
+                        await browser.close()
+                except Exception as e:
+                    print(f'❌ {name}: FAILED - {str(e)[:100]}')
 
-asyncio.run(test_browsers())
-"
+        if __name__ == '__main__':
+            asyncio.run(test_browsers())
+        EOF
+
+    - name: Test browser launches
+      run: python test_browsers.py
 
     - name: Set up display
       run: |
