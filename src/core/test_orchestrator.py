@@ -1,9 +1,8 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Test Orchestrator
-Main orchestrator for coordinating stealth browser tests (COMPLETE)
+STEALTH BROWSER TESTING FRAMEWORK - Test Orchestrator (FIXED)
+Main orchestrator with standardized configuration loading
 
 Authors: kravitzcoder & MiniMax Agent
-Phase: 1 - Foundation & Workflows
 """
 import asyncio
 import json
@@ -33,58 +32,46 @@ class StealthTestOrchestrator:
         # Initialize all runners with screenshot engine
         self.playwright_runner = PlaywrightRunner(self.screenshot_engine)
         
-        # Load configurations
-        self.library_matrix = self._load_library_matrix()
-        self.test_targets = self._load_test_targets()
+        # Load configurations with standardized approach
+        self.library_matrix = self._load_config_file("library_matrix.json")
+        self.test_targets = self._load_config_file("test_targets.json")
         
         logger.info("Test orchestrator initialized")
     
-    def _load_library_matrix(self) -> Dict[str, Any]:
-        """Load the library testing matrix configuration"""
-        try:
-            # Try multiple possible paths
-            possible_paths = [
-                Path(__file__).parent.parent / "config" / "library_matrix.json",
-                Path(__file__).parent.parent.parent / "src" / "config" / "library_matrix.json",
-                Path("src/config/library_matrix.json"),
-                Path("config/library_matrix.json")
-            ]
-            
-            for matrix_path in possible_paths:
-                if matrix_path.exists():
-                    logger.info(f"Loading library matrix from: {matrix_path}")
-                    with open(matrix_path, 'r') as f:
+    def _load_config_file(self, filename: str) -> Dict[str, Any]:
+        """Standardized configuration file loading"""
+        # Priority order for config file locations
+        search_paths = [
+            # 1. Check if we're in standard src/config structure
+            Path("src/config") / filename,
+            # 2. Relative to this file
+            Path(__file__).parent.parent / "config" / filename,
+            # 3. From project root
+            Path.cwd() / "src" / "config" / filename,
+            # 4. Legacy location
+            Path("config") / filename
+        ]
+        
+        for config_path in search_paths:
+            if config_path.exists():
+                logger.info(f"Loading {filename} from: {config_path}")
+                try:
+                    with open(config_path, 'r') as f:
                         return json.load(f)
-            
-            logger.error("Could not find library_matrix.json in any expected location")
+                except Exception as e:
+                    logger.error(f"Failed to parse {filename}: {e}")
+                    continue
+        
+        logger.error(f"Could not find {filename} in any expected location")
+        logger.error(f"Searched paths: {[str(p) for p in search_paths]}")
+        
+        # Return minimal valid structure to avoid crashes
+        if filename == "library_matrix.json":
             return {"library_matrix": {}}
-            
-        except Exception as e:
-            logger.error(f"Failed to load library matrix: {e}")
-            return {"library_matrix": {}}
-    
-    def _load_test_targets(self) -> Dict[str, Any]:
-        """Load test targets configuration"""
-        try:
-            possible_paths = [
-                Path(__file__).parent.parent / "config" / "test_targets.json",
-                Path(__file__).parent.parent.parent / "src" / "config" / "test_targets.json",
-                Path("src/config/test_targets.json"),
-                Path("config/test_targets.json")
-            ]
-            
-            for target_path in possible_paths:
-                if target_path.exists():
-                    logger.info(f"Loading test targets from: {target_path}")
-                    with open(target_path, 'r') as f:
-                        return json.load(f)
-            
-            logger.error("Could not find test_targets.json in any expected location")
-            return {"test_targets": {}, "mobile_configurations": {}}
-            
-        except Exception as e:
-            logger.error(f"Failed to load test targets: {e}")
-            return {"test_targets": {}, "mobile_configurations": {}}
+        elif filename == "test_targets.json":
+            return {"test_targets": {}, "mobile_configurations": {}, "wait_configuration": {}}
+        else:
+            return {}
     
     def _get_library_info(self, library_name: str) -> Optional[Dict[str, Any]]:
         """Get library information from the matrix"""
@@ -92,6 +79,7 @@ class StealthTestOrchestrator:
             libraries = category_data.get("libraries", {})
             if library_name in libraries:
                 lib_info = libraries[library_name].copy()
+                lib_info["category"] = category_name.replace("_category", "")
                 return lib_info
         
         logger.warning(f"Library '{library_name}' not found in matrix")
@@ -99,6 +87,9 @@ class StealthTestOrchestrator:
     
     def _get_runner_for_category(self, category: str):
         """Get the appropriate runner for a category"""
+        # Normalize category name
+        category = category.replace("_category", "")
+        
         category_mapping = {
             "playwright": self.playwright_runner
         }
@@ -175,9 +166,9 @@ class StealthTestOrchestrator:
         mobile_configs = self.test_targets.get("mobile_configurations", {})
         mobile_config = mobile_configs.get(device, mobile_configs.get("iphone_x", {}))
         
-        # Get wait configuration
+        # Get wait configuration with reduced defaults
         wait_config = self.test_targets.get("wait_configuration", {})
-        default_wait = wait_config.get("default_wait_time", 30)
+        default_wait = wait_config.get("default_wait_time", 5)  # Reduced from 30
         
         # Test against all target URLs
         test_targets = self.test_targets.get("test_targets", {})
@@ -185,9 +176,15 @@ class StealthTestOrchestrator:
         
         for target_name, target_data in test_targets.items():
             url = target_data.get("url")
-            wait_time = target_data.get("expected_load_time", default_wait)
+            # Use intelligent wait times based on page complexity
+            if "creepjs" in target_name.lower() or "worker" in target_name.lower():
+                wait_time = 8  # Worker pages need more time
+            elif "fingerprint" in target_name.lower() or "bot" in target_name.lower():
+                wait_time = 5  # Standard complex pages
+            else:
+                wait_time = 3  # Simple pages like IP check
             
-            logger.info(f"Testing {library_name} on {target_name}: {url}")
+            logger.info(f"Testing {library_name} on {target_name}: {url} (wait: {wait_time}s)")
             
             try:
                 result = await runner.run_test(
@@ -262,11 +259,14 @@ class StealthTestOrchestrator:
         all_results = []
         
         if parallel:
-            # Run libraries in parallel
-            tasks = [
-                self.test_single_library(lib_name, proxy_config, device)
-                for lib_name in library_names
-            ]
+            # Run libraries in parallel (limit concurrency to avoid resource issues)
+            semaphore = asyncio.Semaphore(2)  # Max 2 concurrent browser instances
+            
+            async def run_with_semaphore(lib_name):
+                async with semaphore:
+                    return await self.test_single_library(lib_name, proxy_config, device)
+            
+            tasks = [run_with_semaphore(lib_name) for lib_name in library_names]
             
             results_lists = await asyncio.gather(*tasks, return_exceptions=True)
             
@@ -298,7 +298,7 @@ class StealthTestOrchestrator:
         filename_prefix: str = "stealth_test"
     ) -> str:
         """
-        Save test results to JSON file
+        Save test results to JSON file with enhanced summary
         
         Args:
             results: List of TestResult objects
@@ -325,8 +325,42 @@ class StealthTestOrchestrator:
         by_library = {}
         for result in results:
             if result.library not in by_library:
-                by_library[result.library] = []
-            by_library[result.library].append(result.to_dict())
+                by_library[result.library] = {
+                    "results": [],
+                    "stats": {
+                        "total": 0,
+                        "passed": 0,
+                        "failed": 0,
+                        "proxy_working": 0,
+                        "mobile_ua_detected": 0,
+                        "avg_execution_time": 0
+                    }
+                }
+            
+            lib_data = by_library[result.library]
+            lib_data["results"].append(result.to_dict())
+            lib_data["stats"]["total"] += 1
+            
+            if result.success:
+                lib_data["stats"]["passed"] += 1
+            else:
+                lib_data["stats"]["failed"] += 1
+            
+            if result.proxy_working:
+                lib_data["stats"]["proxy_working"] += 1
+            if result.is_mobile_ua:
+                lib_data["stats"]["mobile_ua_detected"] += 1
+            
+            # Track execution time
+            lib_data["stats"]["avg_execution_time"] += result.execution_time
+        
+        # Calculate averages
+        for lib_name, lib_data in by_library.items():
+            if lib_data["stats"]["total"] > 0:
+                lib_data["stats"]["avg_execution_time"] /= lib_data["stats"]["total"]
+                lib_data["stats"]["success_rate"] = (lib_data["stats"]["passed"] / lib_data["stats"]["total"]) * 100
+                lib_data["stats"]["proxy_success_rate"] = (lib_data["stats"]["proxy_working"] / lib_data["stats"]["total"]) * 100
+                lib_data["stats"]["mobile_ua_rate"] = (lib_data["stats"]["mobile_ua_detected"] / lib_data["stats"]["total"]) * 100
         
         # Prepare summary data
         summary_data = {
@@ -338,7 +372,14 @@ class StealthTestOrchestrator:
                 "success_rate": f"{(passed/total_tests*100):.1f}%" if total_tests > 0 else "0%",
                 "libraries_tested": len(by_library)
             },
-            "results_by_library": by_library,
+            "library_summaries": {
+                lib_name: lib_data["stats"] 
+                for lib_name, lib_data in by_library.items()
+            },
+            "results_by_library": {
+                lib_name: lib_data["results"]
+                for lib_name, lib_data in by_library.items()
+            },
             "all_results": [r.to_dict() for r in results]
         }
         
@@ -362,13 +403,13 @@ class StealthTestOrchestrator:
         prefix: str,
         timestamp: str
     ) -> None:
-        """Generate markdown summary report"""
+        """Generate markdown summary report with insights"""
         try:
             results_dir = Path("test_results") / "reports"
             md_path = results_dir / f"{prefix}_{timestamp}_summary.md"
             
             with open(md_path, 'w') as f:
-                f.write(f"# Stealth Browser Testing Results\n\n")
+                f.write(f"# Playwright Stealth Testing Results\n\n")
                 f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
                 
                 # Overall statistics
@@ -398,10 +439,14 @@ class StealthTestOrchestrator:
                     proxy_working = len([r for r in lib_results if r.proxy_working])
                     mobile_ua = len([r for r in lib_results if r.is_mobile_ua])
                     
-                    f.write(f"- **Proxy Working:** {proxy_working}/{lib_total}\n")
-                    f.write(f"- **Mobile UA Detected:** {mobile_ua}/{lib_total}\n\n")
+                    f.write(f"- **Proxy Working:** {proxy_working}/{lib_total} ({proxy_working/lib_total*100:.1f}%)\n")
+                    f.write(f"- **Mobile UA Detected:** {mobile_ua}/{lib_total} ({mobile_ua/lib_total*100:.1f}%)\n")
                     
-                    # Test details
+                    # Average execution time
+                    avg_time = sum(r.execution_time for r in lib_results) / lib_total
+                    f.write(f"- **Avg Execution Time:** {avg_time:.2f}s\n\n")
+                    
+                    # Test details table
                     f.write(f"| Test | Success | Proxy | Mobile UA | Time |\n")
                     f.write(f"|------|---------|-------|-----------|------|\n")
                     for r in lib_results:
@@ -411,6 +456,26 @@ class StealthTestOrchestrator:
                         f.write(f"| {r.test_name} | {success_icon} | {proxy_icon} | {mobile_icon} | {r.execution_time:.2f}s |\n")
                     
                     f.write("\n")
+                
+                # Add insights section
+                f.write("## Key Insights\n\n")
+                
+                # Proxy effectiveness
+                total_proxy_working = len([r for r in results if r.proxy_working])
+                f.write(f"- **Proxy Effectiveness:** {total_proxy_working}/{total} tests showed correct proxy IP\n")
+                
+                # Mobile UA success
+                total_mobile = len([r for r in results if r.is_mobile_ua])
+                f.write(f"- **Mobile UA Success:** {total_mobile}/{total} tests detected mobile user agent\n")
+                
+                # Fastest library
+                if by_lib:
+                    fastest_lib = min(by_lib.items(), 
+                                    key=lambda x: sum(r.execution_time for r in x[1]) / len(x[1]))
+                    avg_time = sum(r.execution_time for r in fastest_lib[1]) / len(fastest_lib[1])
+                    f.write(f"- **Fastest Library:** {fastest_lib[0]} (avg {avg_time:.2f}s per test)\n")
+                
+                f.write("\n")
             
             logger.info(f"Markdown summary saved to: {md_path}")
             
@@ -426,6 +491,9 @@ class StealthTestOrchestrator:
     
     def get_libraries_by_category(self, category: str) -> List[str]:
         """Get libraries in a specific category"""
+        # Normalize category name
+        category = category.replace("_category", "")
+        
         for category_key, category_data in self.library_matrix.get("library_matrix", {}).items():
             if category in category_key.lower():
                 return list(category_data.get("libraries", {}).keys())
