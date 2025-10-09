@@ -1,8 +1,8 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine
-Enhanced screenshot capture with dynamic content handling
+STEALTH BROWSER TESTING FRAMEWORK - Screenshot Engine (FIXED)
+Immediate screenshot capture without font loading delays
 
-REVERTED to original working version with minor improvements
+Authors: kravitzcoder & MiniMax Agent
 """
 import logging
 import asyncio
@@ -28,30 +28,31 @@ class ScreenshotEngine:
         browser_instance: Any, 
         library_name: str, 
         url_name: str,
-        wait_time: int = 30,
+        wait_time: int = 5,  # Reduced from 30 to 5 seconds
         page: Any = None
     ) -> Optional[str]:
         """
-        Capture screenshot after waiting for page to fully load
+        Capture screenshot with minimal wait - stealth should work immediately
         
-        REVERTED: Back to simple working approach
+        FIXED: No more font wait timeouts, immediate capture approach
         """
         try:
-            # Determine if this is a dynamic page needing extra time
-            dynamic_pages = ['fingerprint', 'bot-check', 'creepjs']
-            is_dynamic = any(keyword in url_name.lower() for keyword in dynamic_pages)
+            # Minimal intelligent wait based on page type
+            wait_config = {
+                'creepjs': 8,      # Needs slightly more for worker analysis
+                'workers': 8,      # Worker initialization
+                'fingerprint': 5,  # Standard wait
+                'bot-check': 5,    # Standard wait
+                'ip': 3            # Quick page
+            }
             
-            if is_dynamic:
-                extra_wait = 5
-                logger.info(f"Dynamic page detected ({url_name}), adding {extra_wait}s extra wait")
-                await asyncio.sleep(extra_wait)
+            for keyword, wait in wait_config.items():
+                if keyword in url_name.lower():
+                    wait_time = wait
+                    logger.info(f"Using {wait}s wait for {url_name}")
+                    break
             
-            # Special handling for worker pages
-            if 'worker' in url_name.lower():
-                logger.info(f"Worker page detected, adding 20s for worker initialization")
-                await asyncio.sleep(20)
-            
-            logger.info(f"Waiting {wait_time}s before screenshot for {library_name}/{url_name}")
+            # Wait for the specified time
             await asyncio.sleep(wait_time)
             
             # Generate filename
@@ -61,54 +62,118 @@ class ScreenshotEngine:
             
             # Use page object if provided (Playwright case)
             if page is not None:
-                logger.info(f"Taking screenshot using page object for {library_name}")
+                logger.info(f"Taking immediate screenshot for {library_name}")
                 
-                # REVERTED: Back to simple approach that worked!
+                # Method 1: Force immediate screenshot without waiting for fonts
                 try:
-                    # Try full page first (no timeout parameter = no font wait enforcement!)
-                    await page.screenshot(path=str(filepath), full_page=True)
-                    logger.info(f"✅ Full page screenshot captured: {filepath}")
-                except Exception as e:
-                    logger.warning(f"⚠️ Full page screenshot failed: {str(e)[:100]}")
+                    # Inject script to mark fonts as loaded immediately
+                    await page.evaluate("""
+                        // Force font ready state
+                        if (document.fonts && document.fonts.ready) {
+                            document.fonts.ready = Promise.resolve();
+                        }
+                        // Remove any custom fonts to avoid loading delays
+                        document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+                            if (link.href.includes('font')) {
+                                link.remove();
+                            }
+                        });
+                    """)
                     
-                    # Fallback: Viewport screenshot
-                    try:
-                        logger.info("Trying viewport screenshot...")
-                        await page.screenshot(path=str(filepath))
-                        logger.info(f"✅ Viewport screenshot captured: {filepath}")
-                    except Exception as e2:
-                        logger.error(f"❌ Viewport screenshot also failed: {str(e2)[:100]}")
-                        return None
+                    # Take screenshot with very short timeout
+                    await page.screenshot(
+                        path=str(filepath),
+                        full_page=True,
+                        timeout=3000,  # 3 second timeout max
+                        animations='disabled'
+                    )
+                    
+                    if filepath.exists() and filepath.stat().st_size > 1000:
+                        size_kb = filepath.stat().st_size / 1024
+                        logger.info(f"✅ Screenshot captured: {filepath.name} ({size_kb:.1f} KB)")
+                        return str(filepath)
+                    
+                except Exception as e:
+                    logger.debug(f"Full page screenshot attempt failed: {str(e)[:100]}")
                 
-                # Verify file was created
-                if filepath.exists() and filepath.stat().st_size > 0:
-                    size_kb = filepath.stat().st_size / 1024
-                    logger.info(f"✅ Screenshot verified: {filepath.name} ({size_kb:.1f} KB)")
+                # Method 2: Viewport screenshot (faster, no full page)
+                try:
+                    await page.screenshot(
+                        path=str(filepath),
+                        full_page=False,  # Just viewport
+                        timeout=2000
+                    )
+                    
+                    if filepath.exists() and filepath.stat().st_size > 1000:
+                        size_kb = filepath.stat().st_size / 1024
+                        logger.info(f"✅ Viewport screenshot captured: {filepath.name} ({size_kb:.1f} KB)")
+                        return str(filepath)
+                        
+                except Exception as e:
+                    logger.debug(f"Viewport screenshot failed: {str(e)[:100]}")
+                
+                # Method 3: Element screenshot of main content
+                try:
+                    # Try to find main content area
+                    main_element = await page.query_selector('main') or \
+                                   await page.query_selector('body') or \
+                                   await page.query_selector('html')
+                    
+                    if main_element:
+                        await main_element.screenshot(path=str(filepath), timeout=2000)
+                        
+                        if filepath.exists() and filepath.stat().st_size > 1000:
+                            logger.info(f"✅ Element screenshot captured: {filepath.name}")
+                            return str(filepath)
+                            
+                except Exception as e:
+                    logger.debug(f"Element screenshot failed: {str(e)[:100]}")
+                
+                # Method 4: Base64 screenshot (last resort)
+                try:
+                    screenshot_bytes = await page.screenshot(timeout=1000, full_page=False)
+                    with open(filepath, 'wb') as f:
+                        f.write(screenshot_bytes)
+                    logger.info(f"✅ Binary screenshot captured: {filepath.name}")
                     return str(filepath)
-                else:
-                    logger.error(f"❌ Screenshot file not created or empty: {filepath}")
+                    
+                except Exception as e:
+                    logger.warning(f"All screenshot methods failed for {library_name}/{url_name}")
+                    # Return None but don't fail the test
                     return None
+                    
             else:
                 # Fall back to sync capture for other browsers
                 return self.capture_screenshot(browser_instance, library_name, url_name)
                 
         except Exception as e:
-            logger.error(f"❌ Screenshot with wait failed: {str(e)[:200]}")
-            # Last resort: try basic sync method
-            try:
-                return self.capture_screenshot(page or browser_instance, library_name, url_name)
-            except:
-                return None
+            logger.error(f"Screenshot capture error: {str(e)[:200]}")
+            # Don't fail the test due to screenshot issues
+            return None
     
     def capture_with_wait_sync(
         self,
         driver: Any,
         library_name: str,
         url_name: str,
-        wait_time: int = 30
+        wait_time: int = 5  # Reduced from 30
     ) -> Optional[str]:
-        """Capture screenshot after waiting (sync version for Selenium)"""
+        """Capture screenshot after minimal wait (sync version for Selenium)"""
         try:
+            # Intelligent wait based on page
+            wait_config = {
+                'creepjs': 8,
+                'workers': 8,
+                'fingerprint': 5,
+                'bot-check': 5,
+                'ip': 3
+            }
+            
+            for keyword, wait in wait_config.items():
+                if keyword in url_name.lower():
+                    wait_time = wait
+                    break
+            
             logger.info(f"Waiting {wait_time}s before screenshot for {library_name}/{url_name}")
             time.sleep(wait_time)
             
@@ -130,58 +195,59 @@ class ScreenshotEngine:
         filepath = self.screenshots_dir / filename
         
         try:
-            # Selenium-based libraries
-            if hasattr(browser_instance, 'save_screenshot'):
-                logger.info(f"Using save_screenshot method for {library_name}")
-                browser_instance.save_screenshot(str(filepath))
+            # Try multiple methods in order of preference
+            screenshot_methods = [
+                ('save_screenshot', lambda: browser_instance.save_screenshot(str(filepath))),
+                ('get_screenshot_as_file', lambda: browser_instance.get_screenshot_as_file(str(filepath))),
+                ('get_screenshot_as_png', lambda: self._save_png_screenshot(browser_instance, filepath)),
+                ('get_screenshot_as_base64', lambda: self._save_base64_screenshot(browser_instance, filepath)),
+                ('take_screenshot', lambda: browser_instance.take_screenshot(str(filepath))),
+                ('get_screenshot', lambda: self._save_generic_screenshot(browser_instance, filepath))
+            ]
             
-            elif hasattr(browser_instance, 'get_screenshot_as_file'):
-                logger.info(f"Using get_screenshot_as_file method for {library_name}")
-                browser_instance.get_screenshot_as_file(str(filepath))
+            for method_name, method_func in screenshot_methods:
+                if hasattr(browser_instance, method_name):
+                    try:
+                        logger.debug(f"Trying {method_name} method for {library_name}")
+                        method_func()
+                        
+                        if filepath.exists() and filepath.stat().st_size > 0:
+                            logger.info(f"Screenshot captured via {method_name}: {filepath}")
+                            return str(filepath)
+                    except Exception as e:
+                        logger.debug(f"{method_name} failed: {str(e)[:100]}")
+                        continue
             
-            elif hasattr(browser_instance, 'get_screenshot_as_base64'):
-                logger.info(f"Using base64 screenshot method for {library_name}")
-                screenshot_data = browser_instance.get_screenshot_as_base64()
-                with open(filepath, 'wb') as f:
-                    f.write(base64.b64decode(screenshot_data))
-            
-            elif hasattr(browser_instance, 'get_screenshot_as_png'):
-                logger.info(f"Using PNG screenshot method for {library_name}")
-                screenshot_data = browser_instance.get_screenshot_as_png()
-                with open(filepath, 'wb') as f:
-                    f.write(screenshot_data)
-            
-            elif hasattr(browser_instance, 'take_screenshot'):
-                logger.info(f"Using take_screenshot method for {library_name}")
-                browser_instance.take_screenshot(str(filepath))
-            
-            elif hasattr(browser_instance, 'get_screenshot'):
-                logger.info(f"Using get_screenshot method for {library_name}")
-                screenshot_data = browser_instance.get_screenshot()
-                if isinstance(screenshot_data, str):
-                    with open(filepath, 'wb') as f:
-                        f.write(base64.b64decode(screenshot_data))
-                elif isinstance(screenshot_data, bytes):
-                    with open(filepath, 'wb') as f:
-                        f.write(screenshot_data)
-                else:
-                    raise Exception("Unknown screenshot data format")
-            
-            else:
-                logger.warning(f"No screenshot method found for {library_name}")
-                return None
-            
-            # Verify file was created
-            if filepath.exists() and filepath.stat().st_size > 0:
-                logger.info(f"Screenshot captured successfully: {filepath} (size: {filepath.stat().st_size} bytes)")
-                return str(filepath)
-            else:
-                logger.error(f"Screenshot file not created or empty: {filepath}")
-                return None
+            logger.warning(f"No working screenshot method found for {library_name}")
+            return None
                 
         except Exception as e:
             logger.error(f"Screenshot capture failed for {library_name}: {str(e)}")
             return None
+    
+    def _save_png_screenshot(self, browser_instance, filepath):
+        """Helper to save PNG screenshot data"""
+        screenshot_data = browser_instance.get_screenshot_as_png()
+        with open(filepath, 'wb') as f:
+            f.write(screenshot_data)
+    
+    def _save_base64_screenshot(self, browser_instance, filepath):
+        """Helper to save base64 screenshot data"""
+        screenshot_data = browser_instance.get_screenshot_as_base64()
+        with open(filepath, 'wb') as f:
+            f.write(base64.b64decode(screenshot_data))
+    
+    def _save_generic_screenshot(self, browser_instance, filepath):
+        """Helper to save generic screenshot data"""
+        screenshot_data = browser_instance.get_screenshot()
+        if isinstance(screenshot_data, str):
+            with open(filepath, 'wb') as f:
+                f.write(base64.b64decode(screenshot_data))
+        elif isinstance(screenshot_data, bytes):
+            with open(filepath, 'wb') as f:
+                f.write(screenshot_data)
+        else:
+            raise Exception("Unknown screenshot data format")
     
     def cleanup_old_screenshots(self, days_old: int = 7) -> None:
         """Remove screenshots older than specified days"""
