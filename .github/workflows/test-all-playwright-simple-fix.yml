@@ -1,0 +1,117 @@
+name: Test All Playwright Libraries - Simple Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  test-all-playwright:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Install and setup browsers strategically
+      run: |
+        # First install rebrowser-playwright to get its exact version
+        pip install rebrowser-playwright
+        
+        # Get rebrowser-playwright version and install matching playwright
+        REBROWSER_VERSION=$(python -c "import rebrowser_playwright; print(rebrowser_playwright.__version__)")
+        echo "rebrowser-playwright version: $REBROWSER_VERSION"
+        
+        # Install the matching standard playwright version
+        pip install playwright==$REBROWSER_VERSION
+        
+        # Now install browsers using the matching version
+        playwright install chromium --with-deps
+        
+        # Install other libraries after browser setup
+        pip install patchright camoufox
+        
+        # Verify installations
+        echo "Installed packages:"
+        pip list | grep -E "(playwright|patchright|camoufox|rebrowser)"
+        
+        echo "Browser cache contents:"
+        ls -la ~/.cache/ms-playwright/ || echo "No browser cache found"
+
+    - name: Test browser launches
+      run: |
+        python -c "
+import asyncio
+
+async def test_browsers():
+    tests = [
+        ('playwright', 'from playwright.async_api import async_playwright'),
+        ('rebrowser_playwright', 'from rebrowser_playwright.async_api import async_playwright'),
+        ('patchright', 'from patchright.async_api import async_playwright')
+    ]
+    
+    for name, import_cmd in tests:
+        try:
+            print(f'Testing {name}...')
+            local_vars = {}
+            exec(import_cmd, globals(), local_vars)
+            async_playwright = local_vars.get('async_playwright') or globals().get('async_playwright')
+            
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page()
+                await page.goto('about:blank')
+                print(f'✅ {name}: SUCCESS')
+                await browser.close()
+        except Exception as e:
+            print(f'❌ {name}: FAILED - {str(e)[:100]}')
+
+asyncio.run(test_browsers())
+"
+
+    - name: Set up display
+      run: |
+        export DISPLAY=:99
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        
+    - name: Run tests
+      env:
+        HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
+        HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
+        PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+        PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+      run: |
+        python main.py --libraries playwright,patchright,camoufox,rebrowser_playwright
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-test-results
+        path: |
+          test_results/
+          !test_results/screenshots
+        retention-days: 30
+        
+    - name: Upload screenshots
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-screenshots
+        path: test_results/screenshots/
+        retention-days: 7
