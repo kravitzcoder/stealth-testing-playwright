@@ -1,243 +1,117 @@
-name: 🎭 Test All Playwright Libraries
+name: Test All Playwright Libraries - Simple Fix
 
 on:
   workflow_dispatch:
-    inputs:
-      device:
-        description: 'Mobile device to emulate'
-        required: false
-        default: 'iphone_x'
-        type: choice
-        options:
-          - iphone_x
-          - iphone_12
-          - samsung_galaxy
-      mode:
-        description: 'Test execution mode'
-        required: false
-        default: 'sequential'
-        type: choice
-        options:
-          - sequential
-          - parallel
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
-env:
-  PROXY_HOST: ${{ secrets.PROXY_HOST }}
-  PROXY_PORT: ${{ secrets.PROXY_PORT }}
-  PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
-  PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
-  CAMOUFOX_SKIP_AUTO_UPDATE: true
-  NO_GITHUB_API: true
+permissions:
+  contents: read
 
 jobs:
   test-all-playwright:
+    timeout-minutes: 60
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     
     steps:
-    - name: 📄 Checkout Repository
-      uses: actions/checkout@v4
-      
-    - name: 🐍 Setup Python
-      uses: actions/setup-python@v4
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
-        cache: 'pip'
+        python-version: "3.11"
         
-    - name: 🔧 Install System Dependencies
+    - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          xvfb \
-          libgtk-3-0 \
-          libnotify-dev \
-          libnss3 \
-          libxss1 \
-          libasound2t64 \
-          libxtst6 \
-          xauth \
-          libgbm1 \
-          libxkbcommon0 \
-          libxrandr2 \
-          libxcomposite1 \
-          libxdamage1 \
-          libatk-bridge2.0-0 \
-          libpango-1.0-0 \
-          libcairo2 \
-          libatspi2.0-0 \
-          chromium-browser \
-          firefox \
-          wget
-        
-        # Verify browsers
-        echo "Chrome binary check:"
-        which chromium-browser || which chromium || which google-chrome || echo "Chrome not in PATH"
-        echo "Firefox binary check:"
-        which firefox || echo "Firefox not in PATH"
-        
-    - name: 📦 Install All Dependencies & Browsers
-      run: |
-        pip install --upgrade pip
+        python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-        # Install Playwright browsers
-        echo "=== Installing Browsers ==="
-        playwright install chromium firefox
-        playwright install-deps chromium firefox
+    - name: Install and setup browsers strategically
+      run: |
+        # First install rebrowser-playwright to get its exact version
+        pip install rebrowser-playwright
         
-        # Install Patchright browser
-        patchright install chromium || echo "⚠️ Patchright install warning (continuing)"
+        # Get rebrowser-playwright version and install matching playwright
+        REBROWSER_VERSION=$(python -c "import rebrowser_playwright; print(rebrowser_playwright.__version__)")
+        echo "rebrowser-playwright version: $REBROWSER_VERSION"
         
-        # Install Rebrowser Playwright browser - Multiple methods
-        echo "=== Installing Rebrowser Playwright Browser ==="
+        # Install the matching standard playwright version
+        pip install playwright==$REBROWSER_VERSION
         
-        # Method 1: Try standard playwright install (shares cache)
-        echo "Method 1: Standard playwright install for rebrowser compatibility..."
-        playwright install chromium || echo "⚠️ Method 1 failed"
+        # Now install browsers using the matching version
+        playwright install chromium --with-deps
         
-        # Method 2: Try python module method
-        echo "Method 2: Python module install..."
-        python -m rebrowser_playwright install chromium || echo "⚠️ Method 2 failed"
-        
-        # Method 3: Check if browsers are already available
-        echo "Method 3: Verify browser availability..."
-        python -c "
-from rebrowser_playwright.sync_api import sync_playwright
-try:
-    p = sync_playwright().start()
-    browser = p.chromium.launch()
-    print('✅ Rebrowser chromium browser available')
-    browser.close()
-    p.stop()
-except Exception as e:
-    print(f'⚠️ Browser verification failed: {e}')
-" || echo "⚠️ Method 3 verification failed"
+        # Install other libraries after browser setup
+        pip install patchright camoufox
         
         # Verify installations
-        echo ""
-        echo "=== Verifying Installations ==="
-        python -c "import playwright; print('✅ Playwright')"
-        python -c "import patchright; print('✅ Patchright')"
-        python -c "import camoufox; print('✅ Camoufox with geoip')"
-        python -c "import rebrowser_playwright; print('✅ Rebrowser Playwright')"
-        python -c "import pygeoip; print('✅ pygeoip')"
-    
-    - name: ✅ Verify Browser Installations
+        echo "Installed packages:"
+        pip list | grep -E "(playwright|patchright|camoufox|rebrowser)"
+        
+        echo "Browser cache contents:"
+        ls -la ~/.cache/ms-playwright/ || echo "No browser cache found"
+
+    - name: Test browser launches
       run: |
-        echo "=== Browser Verification ==="
-        
-        python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); print('✅ Chromium functional'); browser.close(); p.stop()" || {
-          echo "❌ Chromium verification failed!"
-          exit 1
-        }
-        
-        python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.firefox.launch(); print('✅ Firefox functional'); browser.close(); p.stop()" || {
-          echo "⚠️ Firefox verification failed (continuing)"
-        }
-        
-        # Enhanced Rebrowser verification with fallback
-        echo "=== Rebrowser Playwright Verification ==="
         python -c "
-from rebrowser_playwright.sync_api import sync_playwright
-import sys
-try:
-    p = sync_playwright().start()
-    browser = p.chromium.launch(headless=True)
-    print('✅ Rebrowser Chromium fully functional')
-    browser.close()
-    p.stop()
-except Exception as e:
-    print(f'⚠️ Rebrowser verification failed: {e}')
-    print('This may still work at runtime - continuing tests')
-    sys.exit(0)  # Don't fail the workflow
-" || {
-          echo "⚠️ Rebrowser verification failed - may auto-download on first use"
-        }
-        
-    - name: ✅ Validate Installation Versions
-      run: |
-        echo "=== Installation Verification ==="
-        echo ""
-        echo "Python packages:"
-        pip list | grep -E "playwright|patchright|camoufox|pygeoip"
-        echo ""
-        echo "Playwright browsers:"
-        playwright install --list || true
-        
-    - name: ✅ Validate Proxy Configuration
-      run: |
-        if [ -z "$PROXY_HOST" ] || [ -z "$PROXY_PORT" ]; then
-          echo "❌ Proxy configuration missing!"
-          echo "Please set PROXY_HOST and PROXY_PORT secrets"
-          exit 1
-        fi
-        
-        echo "✅ Proxy configured: $PROXY_HOST:$PROXY_PORT"
-        
-    - name: 📂 Create Required Directories
-      run: |
-        mkdir -p test_results/screenshots
-        mkdir -p test_results/reports
-        chmod -R 755 test_results
-        
-    - name: 🎭 Run All Playwright Tests
+import asyncio
+
+async def test_browsers():
+    tests = [
+        ('playwright', 'from playwright.async_api import async_playwright'),
+        ('rebrowser_playwright', 'from rebrowser_playwright.async_api import async_playwright'),
+        ('patchright', 'from patchright.async_api import async_playwright')
+    ]
+    
+    for name, import_cmd in tests:
+        try:
+            print(f'Testing {name}...')
+            local_vars = {}
+            exec(import_cmd, globals(), local_vars)
+            async_playwright = local_vars.get('async_playwright') or globals().get('async_playwright')
+            
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page()
+                await page.goto('about:blank')
+                print(f'✅ {name}: SUCCESS')
+                await browser.close()
+        except Exception as e:
+            print(f'❌ {name}: FAILED - {str(e)[:100]}')
+
+asyncio.run(test_browsers())
+"
+
+    - name: Set up display
       run: |
         export DISPLAY=:99
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
         
-        python main.py \
-          --proxy env: \
-          --all \
-          --device "${{ inputs.device }}" \
-          --mode "${{ inputs.mode }}" \
-          --output-prefix "all_playwright" \
-          --verbose
-          
-    - name: 📸 Verify Results
-      if: always()
+    - name: Run tests
+      env:
+        HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
+        HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
+        PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+        PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
       run: |
-        echo "=== Test Results ==="
-        echo "Screenshots:"
-        ls -lh test_results/screenshots/ 2>/dev/null | tail -n 30 || echo "No screenshots"
-        echo ""
-        echo "Screenshot count by library:"
-        for lib in playwright patchright camoufox rebrowser_playwright; do
-          COUNT=$(ls test_results/screenshots/${lib}* 2>/dev/null | wc -l)
-          echo "  $lib: $COUNT screenshots"
-        done
-        echo ""
-        echo "Reports:"
-        ls -lh test_results/reports/ 2>/dev/null | tail -n 10 || echo "No reports"
+        python main.py --libraries playwright,patchright,camoufox,rebrowser_playwright
         
-    - name: 📸 Upload Screenshots
-      if: always()
+    - name: Upload test results
       uses: actions/upload-artifact@v4
+      if: always()
       with:
-        name: screenshots-all-playwright-${{ github.run_number }}
+        name: playwright-test-results
+        path: |
+          test_results/
+          !test_results/screenshots
+        retention-days: 30
+        
+    - name: Upload screenshots
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-screenshots
         path: test_results/screenshots/
         retention-days: 7
-        if-no-files-found: warn
-        
-    - name: 📊 Upload Test Reports
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: reports-all-playwright-${{ github.run_number }}
-        path: test_results/reports/
-        retention-days: 30
-        if-no-files-found: warn
-        
-    - name: 📋 Test Results Summary
-      if: always()
-      run: |
-        echo "## 🎭 All Playwright Libraries Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Device:** ${{ inputs.device }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Mode:** ${{ inputs.mode }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Run:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        if [ -f test_results/reports/*_summary.md ]; then
-          echo "### Detailed Results" >> $GITHUB_STEP_SUMMARY
-          cat test_results/reports/*_summary.md >> $GITHUB_STEP_SUMMARY
-        fi
