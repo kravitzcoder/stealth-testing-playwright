@@ -96,26 +96,108 @@ jobs:
               echo "=== Installing rebrowser-playwright ==="
               echo "=========================================="
               
-              # SIMPLE FIX: Install playwright first for browser
-              # rebrowser-playwright and playwright share the same browser cache
+              echo "Step 1: Installing Python packages..."
+              pip install playwright rebrowser-playwright
+              echo "✅ Packages installed"
               
-              echo "Step 1: Installing playwright (for browser)..."
-              pip install playwright
-              
-              echo "Step 2: Installing rebrowser-playwright..."
-              pip install rebrowser-playwright
-              
-              echo "Step 3: Downloading Chromium browser..."
-              playwright install chromium
+              echo ""
+              echo "Step 2: Installing system dependencies for Chromium..."
               playwright install-deps chromium
+              echo "✅ Dependencies installed"
               
-              echo "Step 4: Verifying installations..."
-              python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright OK')"
-              python -c "from rebrowser_playwright.async_api import async_playwright; print('✅ Rebrowser OK')"
+              echo ""
+              echo "Step 3: Installing Chromium browser (multiple methods)..."
               
+              # Method 1: Standard playwright install
+              echo "Method 1: Standard playwright install chromium..."
+              if playwright install chromium 2>&1 | tee /tmp/install1.log; then
+                echo "✅ Method 1 succeeded"
+              else
+                echo "⚠️ Method 1 had warnings (checking if browser exists...)"
+              fi
+              
+              # Method 2: Using python module for rebrowser
+              echo ""
+              echo "Method 2: Python module rebrowser install..."
+              if python -m rebrowser_playwright install chromium 2>&1 | tee /tmp/install2.log; then
+                echo "✅ Method 2 succeeded"
+              else
+                echo "⚠️ Method 2 had warnings"
+              fi
+              
+              # Method 3: Direct playwright package install
+              echo ""
+              echo "Method 3: Direct playwright package install..."
+              python -m playwright install chromium 2>&1 | tee /tmp/install3.log || echo "Method 3 completed"
+              
+              echo ""
+              echo "Step 4: Verifying browser installation..."
+              
+              # Check if browser directory exists
+              echo "Checking browser cache directory..."
+              ls -la ~/.cache/ms-playwright/ 2>&1 || echo "Cache directory structure:"
+              find ~/.cache/ms-playwright/ -type f -name "*chrome*" -o -name "*chromium*" 2>&1 | head -20 || echo "Searching for browser..."
+              
+              # List all installed browsers
+              echo ""
+              echo "Installed browsers:"
+              playwright install --help | grep -A 50 "browsers" || true
+              ls -la ~/.cache/ms-playwright/ 2>&1 || true
+              
+              # Verify Python imports
+              echo ""
+              echo "Step 5: Verifying Python imports..."
+              python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright import OK')"
+              python -c "from rebrowser_playwright.async_api import async_playwright; print('✅ Rebrowser import OK')"
+              
+              # Try to get browser path
+              echo ""
+              echo "Step 6: Checking browser paths..."
+              python -c "
+import sys
+try:
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser_type = p.chromium
+        print(f'Playwright expects browser at: {browser_type.executable_path}')
+except Exception as e:
+    print(f'Could not determine playwright path: {e}')
+
+try:
+    from rebrowser_playwright.sync_api import sync_playwright as rb_sync_playwright
+    with rb_sync_playwright() as p:
+        browser_type = p.chromium
+        print(f'Rebrowser expects browser at: {browser_type.executable_path}')
+except Exception as e:
+    print(f'Could not determine rebrowser path: {e}')
+" || echo "Path check completed with errors"
+              
+              echo ""
+              echo "Step 7: Final verification - attempting browser launch..."
+              timeout 120 python -c "
+import asyncio
+from rebrowser_playwright.async_api import async_playwright
+
+async def test_launch():
+    print('Attempting to launch browser...')
+    try:
+        async with async_playwright() as p:
+            print('Playwright context created')
+            browser = await p.chromium.launch(headless=True, timeout=60000)
+            print('✅ Browser launched successfully!')
+            await browser.close()
+            return True
+    except Exception as e:
+        print(f'❌ Browser launch failed: {e}')
+        print('This may mean browser needs to download on first actual test run')
+        return False
+
+result = asyncio.run(test_launch())
+" || echo "⚠️ Pre-launch test completed (browser may download during actual test)"
+              
+              echo ""
               echo "=========================================="
               echo "✅ rebrowser-playwright setup complete"
-              echo "Both packages share browser at ~/.cache/ms-playwright"
               echo "=========================================="
               ;;
           
@@ -147,7 +229,18 @@ jobs:
           echo "Running: $CMD"
           echo "=========================================="
           
-          $CMD
+          # For rebrowser, give extra time for potential first-run browser download
+          if [ "${{ inputs.library }}" = "rebrowser_playwright" ]; then
+            echo "⚠️ Note: First test may trigger browser download (1-2 min)"
+            timeout 900 $CMD || {
+              echo "❌ Test failed or timed out"
+              echo "Checking browser status..."
+              ls -la ~/.cache/ms-playwright/ || true
+              exit 1
+            }
+          else
+            $CMD
+          fi
       
       - name: 📊 Display Results Summary
         if: always()
@@ -165,6 +258,21 @@ jobs:
               echo "No summary report found"
             fi
           fi
+      
+      - name: 🔍 Debug Info (if tests failed)
+        if: failure()
+        run: |
+          echo "=========================================="
+          echo "Debug Information"
+          echo "=========================================="
+          echo "Browser cache contents:"
+          ls -laR ~/.cache/ms-playwright/ 2>&1 | head -100 || echo "Could not list cache"
+          echo ""
+          echo "Python packages:"
+          pip list | grep -E "(playwright|rebrowser)" || true
+          echo ""
+          echo "Install logs:"
+          cat /tmp/install*.log 2>&1 || echo "No install logs"
       
       - name: 📤 Upload Test Results
         if: always()
