@@ -88,12 +88,16 @@ jobs:
         # Install Patchright browser
         patchright install chromium || echo "⚠️ Patchright install warning (continuing)"
         
+        # Install Rebrowser Playwright browser
+        rebrowser-playwright install chromium || echo "⚠️ Rebrowser Playwright install warning (continuing)"
+        
         # Verify installations
         echo ""
         echo "=== Verifying Installations ==="
         python -c "import playwright; print('✅ Playwright')"
         python -c "import patchright; print('✅ Patchright')"
         python -c "import camoufox; print('✅ Camoufox with geoip')"
+        python -c "import rebrowser_playwright; print('✅ Rebrowser Playwright')"
         python -c "import pygeoip; print('✅ pygeoip')"
     
     - name: ✅ Verify Browser Installations
@@ -107,6 +111,10 @@ jobs:
         
         python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.firefox.launch(); print('✅ Firefox functional'); browser.close(); p.stop()" || {
           echo "⚠️ Firefox verification failed (continuing)"
+        }
+        
+        python -c "from rebrowser_playwright.sync_api import sync_playwright; p = sync_playwright().start(); browser = p.chromium.launch(); print('✅ Rebrowser Chromium functional'); browser.close(); p.stop()" || {
+          echo "⚠️ Rebrowser Chromium verification failed (continuing)"
         }
         
     - name: ✅ Validate Installation Versions
@@ -155,7 +163,7 @@ jobs:
         ls -lh test_results/screenshots/ 2>/dev/null | tail -n 30 || echo "No screenshots"
         echo ""
         echo "Screenshot count by library:"
-        for lib in playwright patchright camoufox; do
+        for lib in playwright patchright camoufox rebrowser_playwright; do
           COUNT=$(ls test_results/screenshots/${lib}* 2>/dev/null | wc -l)
           echo "  $lib: $COUNT screenshots"
         done
