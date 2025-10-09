@@ -132,6 +132,20 @@ jobs:
         PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
         PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
       run: |
+        # Extract PROXY_HOST and PROXY_PORT from HTTP_PROXY
+        if [ -n "$HTTP_PROXY" ]; then
+          # Remove http:// prefix and extract host:port
+          PROXY_HOST_PORT=$(echo "$HTTP_PROXY" | sed 's|^https\?://||')
+          export PROXY_HOST=$(echo "$PROXY_HOST_PORT" | cut -d':' -f1)
+          export PROXY_PORT=$(echo "$PROXY_HOST_PORT" | cut -d':' -f2)
+          
+          echo "Proxy configuration:"
+          echo "PROXY_HOST: $PROXY_HOST"
+          echo "PROXY_PORT: $PROXY_PORT"
+          echo "PROXY_USERNAME: ${PROXY_USERNAME:+***}"
+          echo "PROXY_PASSWORD: ${PROXY_PASSWORD:+***}"
+        fi
+        
         echo "Running tests with proxy from environment variables"
         python main.py --proxy env: --all
         
