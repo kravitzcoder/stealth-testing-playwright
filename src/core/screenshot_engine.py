@@ -28,7 +28,7 @@ class ScreenshotEngine:
         browser_instance: Any, 
         library_name: str, 
         url_name: str,
-        wait_time: int = 5,  # Reduced from 30 to 5 seconds
+        wait_time: int = 15,  # Reduced from 30 to 15 seconds
         page: Any = None
     ) -> Optional[str]:
         """
@@ -41,9 +41,9 @@ class ScreenshotEngine:
             wait_config = {
                 'creepjs': 8,      # Needs slightly more for worker analysis
                 'workers': 8,      # Worker initialization
-                'fingerprint': 5,  # Standard wait
+                'fingerprint': 15,  # Standard wait
                 'bot-check': 5,    # Standard wait
-                'ip': 3            # Quick page
+                'ip': 15            # Quick page
             }
             
             for keyword, wait in wait_config.items():
@@ -164,9 +164,9 @@ class ScreenshotEngine:
             wait_config = {
                 'creepjs': 8,
                 'workers': 8,
-                'fingerprint': 5,
+                'fingerprint': 15,
                 'bot-check': 5,
-                'ip': 3
+                'ip': 15
             }
             
             for keyword, wait in wait_config.items():
