@@ -1,0 +1,314 @@
+name: 🎭 Single Library Test (Enhanced)
+
+on:
+  workflow_dispatch:
+    inputs:
+      library:
+        description: 'Library to test'
+        required: true
+        type: choice
+        options:
+          - playwright
+          - patchright
+          - camoufox
+          - rebrowser_playwright
+      use_browserforge:
+        description: 'Use BrowserForge-enhanced runners'
+        required: false
+        type: boolean
+        default: true
+      verbose:
+        description: 'Enable verbose logging'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  test-single-library:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: 🖥️ Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libglib2.0-0 \
+            libnss3 \
+            libnspr4 \
+            libdbus-1-3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libdrm2 \
+            libxkbcommon0 \
+            libatspi2.0-0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libpango-1.0-0 \
+            libcairo2 \
+            libasound2t64
+      
+      - name: 📦 Install Core Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+          # Install BrowserForge if enabled
+          if [ "${{ inputs.use_browserforge }}" = "true" ]; then
+            echo "🎭 Installing BrowserForge for enhanced fingerprints..."
+            pip install browserforge
+            python -c "from browserforge import FingerprintGenerator; print('✅ BrowserForge verified')"
+          else
+            echo "📱 Using standard runners (BrowserForge disabled)"
+          fi
+      
+      - name: 📦 Install Library-Specific Dependencies
+        run: |
+          echo "=========================================="
+          echo "Installing: ${{ inputs.library }}"
+          if [ "${{ inputs.use_browserforge }}" = "true" ]; then
+            echo "Mode: BrowserForge Enhanced 🎭"
+          else
+            echo "Mode: Standard 📱"
+          fi
+          echo "=========================================="
+          
+          case "${{ inputs.library }}" in
+            "playwright")
+              pip install playwright
+              playwright install chromium
+              playwright install-deps chromium
+              python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright verified')"
+              ;;
+              
+            "patchright")
+              pip install patchright
+              patchright install chromium || echo "⚠️ Patchright install warning (non-fatal)"
+              python -c "from patchright.sync_api import sync_playwright; print('✅ Patchright verified')"
+              ;;
+              
+            "camoufox")
+              pip install 'camoufox[geoip]' pygeoip
+              python -c "import camoufox; print('✅ Camoufox verified')"
+              ;;
+          
+            "rebrowser_playwright")
+              echo "=== Installing rebrowser-playwright ==="
+              
+              # Install both packages
+              pip install playwright rebrowser-playwright
+              
+              # Install system deps
+              playwright install-deps chromium
+              
+              # Install browser with ALL methods
+              echo "Installing browser (trying multiple methods)..."
+              playwright install chromium
+              python -m playwright install chromium
+              python -m rebrowser_playwright install chromium || true
+              
+              # Check if browser exists
+              echo "Checking browser installation..."
+              ls -la ~/.cache/ms-playwright/ || true
+              
+              # Verify imports
+              python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright OK')"
+              python -c "from rebrowser_playwright.async_api import async_playwright; print('✅ Rebrowser OK')"
+              
+              echo "✅ Setup complete"
+              ;;
+          
+            *)
+              echo "❌ Unknown library: ${{ inputs.library }}"
+              exit 1
+              ;;
+          esac
+      
+      - name: 🎯 Run Single Library Test
+        env:
+          DISPLAY: ':99'
+          PROXY_HOST: ${{ secrets.PROXY_HOST }}
+          PROXY_PORT: ${{ secrets.PROXY_PORT }}
+          PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+          PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
+          USE_BROWSERFORGE: ${{ inputs.use_browserforge }}
+        run: |
+          # Start virtual display
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 2
+          
+          # Build command
+          CMD="python main.py --proxy env: --library ${{ inputs.library }}"
+          
+          # Add BrowserForge flag if enabled
+          if [ "${{ inputs.use_browserforge }}" = "true" ]; then
+            CMD="$CMD --use-browserforge"
+          fi
+          
+          if [ "${{ inputs.verbose }}" = "true" ]; then
+            CMD="$CMD --verbose"
+          fi
+          
+          echo "Running: $CMD"
+          echo "=========================================="
+          
+          # Extended timeout for rebrowser
+          if [ "${{ inputs.library }}" = "rebrowser_playwright" ]; then
+            timeout 900 $CMD
+          else
+            $CMD
+          fi
+      
+      - name: 📊 Display Results Summary
+        if: always()
+        run: |
+          if [ -d "test_results/reports" ]; then
+            echo "=========================================="
+            echo "Test Results Summary"
+            if [ "${{ inputs.use_browserforge }}" = "true" ]; then
+              echo "Mode: BrowserForge Enhanced 🎭"
+            else
+              echo "Mode: Standard 📱"
+            fi
+            echo "=========================================="
+            
+            LATEST_REPORT=$(ls -t test_results/reports/*_summary.md 2>/dev/null | head -1)
+            
+            if [ -n "$LATEST_REPORT" ]; then
+              cat "$LATEST_REPORT"
+              
+              # Check if BrowserForge was used
+              if [ "${{ inputs.use_browserforge }}" = "true" ]; then
+                echo ""
+                echo "BrowserForge Status:"
+                if grep -q "browserforge_enhanced.*true" "$LATEST_REPORT" 2>/dev/null; then
+                  echo "✅ BrowserForge fingerprints successfully applied"
+                else
+                  echo "⚠️ BrowserForge may not have been applied (check logs)"
+                fi
+              fi
+            else
+              echo "No summary report found"
+            fi
+          fi
+      
+      - name: 🔍 Verify BrowserForge Integration
+        if: inputs.use_browserforge == true
+        run: |
+          echo "=========================================="
+          echo "BrowserForge Integration Verification"
+          echo "=========================================="
+          
+          # Check if BrowserForge was imported successfully
+          python << 'EOF'
+          import sys
+          try:
+              from browserforge import FingerprintGenerator
+              print("✅ BrowserForge import: SUCCESS")
+              
+              # Generate test fingerprint
+              gen = FingerprintGenerator()
+              fp = gen.generate(devices=['mobile'], operating_systems=['ios'])
+              print(f"✅ Fingerprint generation: SUCCESS")
+              print(f"   User-Agent: {fp.navigator.user_agent[:60]}...")
+              print(f"   Platform: {fp.navigator.platform}")
+              print(f"   Hardware Concurrency: {fp.navigator.hardware_concurrency}")
+              
+          except ImportError as e:
+              print(f"❌ BrowserForge import: FAILED - {e}")
+              sys.exit(1)
+          except Exception as e:
+              print(f"⚠️ BrowserForge test: WARNING - {e}")
+          EOF
+          
+          # Check test results for BrowserForge usage
+          if [ -d "test_results" ]; then
+            echo ""
+            echo "Checking test results for BrowserForge usage..."
+            grep -r "browserforge_enhanced" test_results/ 2>/dev/null | head -5 || echo "No BrowserForge markers found in results"
+          fi
+      
+      - name: 📝 Debug Info (if failed)
+        if: failure()
+        run: |
+          echo "=========================================="
+          echo "Debug Information"
+          echo "=========================================="
+          
+          echo "Browser cache contents:"
+          ls -laR ~/.cache/ms-playwright/ 2>&1 | head -50 || true
+          
+          echo ""
+          echo "Installed packages:"
+          pip list | grep -E "(playwright|rebrowser|browserforge|camoufox|patchright)" || true
+          
+          echo ""
+          echo "Python environment:"
+          python --version
+          which python
+          
+          if [ "${{ inputs.use_browserforge }}" = "true" ]; then
+            echo ""
+            echo "BrowserForge status:"
+            python -c "import browserforge; print(f'Version: {browserforge.__version__}')" 2>&1 || echo "BrowserForge not available"
+          fi
+          
+          echo ""
+          echo "Recent log files:"
+          find test_results -name "*.log" -type f -mmin -10 2>/dev/null | head -5 | xargs -I {} sh -c 'echo "=== {} ==="; tail -20 {}'
+      
+      - name: 📤 Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ inputs.library }}-${{ inputs.use_browserforge && 'enhanced' || 'standard' }}-${{ github.run_number }}
+          path: test_results/
+          retention-days: 30
+      
+      - name: 📤 Upload Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ inputs.library }}-${{ inputs.use_browserforge && 'enhanced' || 'standard' }}-${{ github.run_number }}
+          path: test_results/screenshots/
+          retention-days: 30
+      
+      - name: 📈 Generate Comparison Summary
+        if: always() && inputs.use_browserforge == true
+        run: |
+          echo "=========================================="
+          echo "🎭 BrowserForge Enhanced Test Summary"
+          echo "=========================================="
+          echo ""
+          echo "Library: ${{ inputs.library }}"
+          echo "BrowserForge: Enabled"
+          echo "Run: ${{ github.run_number }}"
+          echo ""
+          echo "Expected Improvements:"
+          echo "  ✅ More realistic User-Agent patterns"
+          echo "  ✅ Consistent hardware fingerprints"
+          echo "  ✅ Enhanced WebGL properties"
+          echo "  ✅ Intelligent navigator properties"
+          echo ""
+          echo "To compare with standard runner:"
+          echo "  Run this workflow again with 'Use BrowserForge' = false"
+          echo ""
+          echo "Test on detection sites:"
+          echo "  - BrowserLeaks.com"
+          echo "  - CreepJS"
+          echo "  - AmIUnique"
+          echo ""
