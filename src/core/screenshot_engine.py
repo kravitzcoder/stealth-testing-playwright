@@ -41,11 +41,11 @@ class ScreenshotEngine:
         try:
             # Intelligent wait configuration for different page types
             wait_config = {
-                'pixelscan': 35,     # Pixelscan needs LONG time (30-45s)
-                'fingerprint': 35,   # Fingerprint analysis is heavy
-                'ip_check': 30,      # IP check with WebRTC analysis
-                'bot_check': 30,     # Bot detection analysis
-                'creepjs': 25,       # CreepJS analysis
+                'pixelscan': 45,     # Pixelscan needs LONG time (was 35s, now 45s)
+                'fingerprint': 45,   # Fingerprint analysis is heavy (was 35s, now 45s)
+                'ip_check': 35,      # IP check with WebRTC analysis (was 30s, now 35s)
+                'bot_check': 35,     # Bot detection analysis (was 30s, now 35s)
+                'creepjs': 30,       # CreepJS analysis (was 25s, now 30s)
                 'workers': 25,       # Worker analysis
                 'ip': 30,            # Generic IP check
             }
@@ -190,11 +190,11 @@ class ScreenshotEngine:
         try:
             # Intelligent wait based on page
             wait_config = {
-                'pixelscan': 35,
-                'fingerprint': 35,
-                'ip_check': 30,
-                'bot_check': 30,
-                'creepjs': 25,
+                'pixelscan: 45,
+                'fingerprint: 45,
+                'ip_check: 35,
+                'bot_check: 35,
+                'creepjs: 30,
                 'workers': 25,
                 'ip': 30,
             }
