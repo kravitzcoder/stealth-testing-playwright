@@ -1,8 +1,8 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Test Orchestrator (FIXED)
-Main orchestrator with standardized configuration loading
+STEALTH BROWSER TESTING FRAMEWORK - Test Orchestrator (SPECIALIZED RUNNERS)
+Main orchestrator with specialized runners for each library
 
-Authors: kravitzcoder & MiniMax Agent
+Authors: kravitzcoder & Claude
 """
 import asyncio
 import json
@@ -12,8 +12,13 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-# Import category runners
-from ..runners.playwright_runner import PlaywrightRunner
+# Import specialized runners
+from ..runners import (
+    playwright_runner,
+    patchright_runner,
+    camoufox_runner,
+    rebrowser_runner
+)
 
 # Import core components
 from .screenshot_engine import ScreenshotEngine
@@ -29,8 +34,15 @@ class StealthTestOrchestrator:
         # Initialize screenshot engine
         self.screenshot_engine = ScreenshotEngine()
         
-        # Initialize all runners with screenshot engine
-        self.playwright_runner = PlaywrightRunner(self.screenshot_engine)
+        # Initialize specialized runners (CRITICAL: Each library gets its own optimized runner!)
+        self.runners = {
+            'playwright': playwright_runner.PlaywrightRunner(self.screenshot_engine),
+            'patchright': patchright_runner.PatchrightRunner(self.screenshot_engine),
+            'camoufox': camoufox_runner.CamoufoxRunner(self.screenshot_engine),
+            'rebrowser_playwright': rebrowser_runner.RebrowserRunner(self.screenshot_engine)
+        }
+        
+        logger.info(f"✅ Initialized with {len(self.runners)} specialized runners")
         
         # Load configurations with standardized approach
         self.library_matrix = self._load_config_file("library_matrix.json")
@@ -85,18 +97,18 @@ class StealthTestOrchestrator:
         logger.warning(f"Library '{library_name}' not found in matrix")
         return None
     
-    def _get_runner_for_category(self, category: str):
-        """Get the appropriate runner for a category"""
-        # Normalize category name
-        category = category.replace("_category", "")
+    def _get_runner_for_library(self, library_name: str):
+        """
+        Get the specialized runner for a library
         
-        category_mapping = {
-            "playwright": self.playwright_runner
-        }
+        CRITICAL: Each library now uses its own optimized runner!
+        """
+        runner = self.runners.get(library_name)
         
-        runner = category_mapping.get(category)
         if not runner:
-            logger.error(f"No runner found for category: {category}")
+            logger.error(f"❌ No specialized runner found for: {library_name}")
+            logger.error(f"Available runners: {list(self.runners.keys())}")
+        
         return runner
     
     async def test_single_library(
@@ -118,39 +130,18 @@ class StealthTestOrchestrator:
         """
         logger.info(f"Starting test for library: {library_name}")
         
-        # Get library info
+        # Get library info (for logging/metadata)
         lib_info = self._get_library_info(library_name)
         if not lib_info:
-            error_msg = f"Library '{library_name}' not found in matrix configuration"
-            logger.error(error_msg)
-            return [TestResult(
-                library=library_name,
-                category="unknown",
-                test_name="configuration_error",
-                url="",
-                success=False,
-                error=error_msg,
-                execution_time=0
-            )]
+            logger.warning(f"Library '{library_name}' not found in matrix, but will try to run anyway")
+            category = "playwright"  # Default category
+        else:
+            category = lib_info.get("category", "playwright")
         
-        category = lib_info.get("category")
-        if not category:
-            error_msg = f"No category found for library: {library_name}"
-            logger.error(error_msg)
-            return [TestResult(
-                library=library_name,
-                category="unknown",
-                test_name="configuration_error",
-                url="",
-                success=False,
-                error=error_msg,
-                execution_time=0
-            )]
-        
-        # Get runner for this category
-        runner = self._get_runner_for_category(category)
+        # Get specialized runner for this library (CRITICAL!)
+        runner = self._get_runner_for_library(library_name)
         if not runner:
-            error_msg = f"No runner found for category: {category}"
+            error_msg = f"No specialized runner found for library: {library_name}"
             logger.error(error_msg)
             return [TestResult(
                 library=library_name,
@@ -187,8 +178,9 @@ class StealthTestOrchestrator:
             logger.info(f"Testing {library_name} on {target_name}: {url} (wait: {wait_time}s)")
             
             try:
+                # CRITICAL: Call specialized runner's run_test method
+                # Note: Specialized runners don't take library_name parameter
                 result = await runner.run_test(
-                    library_name=library_name,
                     url=url,
                     url_name=target_name,
                     proxy_config=proxy_config,
@@ -484,10 +476,8 @@ class StealthTestOrchestrator:
     
     def get_available_libraries(self) -> List[str]:
         """Get list of all available libraries"""
-        libraries = []
-        for category_data in self.library_matrix.get("library_matrix", {}).values():
-            libraries.extend(category_data.get("libraries", {}).keys())
-        return sorted(libraries)
+        # Return libraries from specialized runners
+        return sorted(list(self.runners.keys()))
     
     def get_libraries_by_category(self, category: str) -> List[str]:
         """Get libraries in a specific category"""
