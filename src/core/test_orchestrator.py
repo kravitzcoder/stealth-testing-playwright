@@ -1,6 +1,6 @@
 """
-STEALTH BROWSER TESTING FRAMEWORK - Test Orchestrator (SPECIALIZED RUNNERS)
-Main orchestrator with specialized runners for each library
+STEALTH BROWSER TESTING FRAMEWORK - Test Orchestrator with BrowserForge
+Main orchestrator with specialized runners and BrowserForge enhancement
 
 Authors: kravitzcoder & Claude
 """
@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-# Import specialized runners
+# Import specialized runners (standard)
 from ..runners import (
     playwright_runner,
     patchright_runner,
@@ -34,7 +34,7 @@ class StealthTestOrchestrator:
         # Initialize screenshot engine
         self.screenshot_engine = ScreenshotEngine()
         
-        # Initialize specialized runners (CRITICAL: Each library gets its own optimized runner!)
+        # Initialize standard runners
         self.runners = {
             'playwright': playwright_runner.PlaywrightRunner(self.screenshot_engine),
             'patchright': patchright_runner.PatchrightRunner(self.screenshot_engine),
@@ -42,13 +42,31 @@ class StealthTestOrchestrator:
             'rebrowser_playwright': rebrowser_runner.RebrowserRunner(self.screenshot_engine)
         }
         
+        # Enhanced runners cache (loaded on demand)
+        self.enhanced_runners = {}
+        
+        # Check BrowserForge availability
+        self.browserforge_available = self._check_browserforge()
+        
         logger.info(f"✅ Initialized with {len(self.runners)} specialized runners")
+        if self.browserforge_available:
+            logger.info("🎭 BrowserForge available - enhanced runners ready")
+        else:
+            logger.info("📱 BrowserForge not available - using standard runners only")
         
         # Load configurations with standardized approach
         self.library_matrix = self._load_config_file("library_matrix.json")
         self.test_targets = self._load_config_file("test_targets.json")
         
         logger.info("Test orchestrator initialized")
+    
+    def _check_browserforge(self) -> bool:
+        """Check if BrowserForge is available"""
+        try:
+            from browserforge.fingerprints import FingerprintGenerator
+            return True
+        except ImportError:
+            return False
     
     def _load_config_file(self, filename: str) -> Dict[str, Any]:
         """Standardized configuration file loading"""
@@ -97,17 +115,71 @@ class StealthTestOrchestrator:
         logger.warning(f"Library '{library_name}' not found in matrix")
         return None
     
-    def _get_runner_for_library(self, library_name: str):
+    def _get_enhanced_runner(self, library_name: str):
         """
-        Get the specialized runner for a library
+        Get or create enhanced runner for a library (with BrowserForge)
         
-        CRITICAL: Each library now uses its own optimized runner!
+        Lazy loading to avoid import errors if enhanced runners don't exist
         """
+        if library_name in self.enhanced_runners:
+            return self.enhanced_runners[library_name]
+        
+        try:
+            if library_name == 'playwright':
+                from ..runners.playwright_runner_enhanced import PlaywrightRunnerEnhanced
+                runner = PlaywrightRunnerEnhanced(self.screenshot_engine)
+            elif library_name == 'patchright':
+                from ..runners.patchright_runner_enhanced import PatchrightRunnerEnhanced
+                runner = PatchrightRunnerEnhanced(self.screenshot_engine)
+            elif library_name == 'camoufox':
+                from ..runners.camoufox_runner_enhanced import CamoufoxRunnerEnhanced
+                runner = CamoufoxRunnerEnhanced(self.screenshot_engine)
+            elif library_name == 'rebrowser_playwright':
+                from ..runners.rebrowser_runner_enhanced import RebrowserRunnerEnhanced
+                runner = RebrowserRunnerEnhanced(self.screenshot_engine)
+            else:
+                logger.warning(f"No enhanced runner for {library_name}, using standard")
+                return None
+            
+            self.enhanced_runners[library_name] = runner
+            logger.info(f"🎭 Loaded enhanced runner for {library_name}")
+            return runner
+            
+        except ImportError as e:
+            logger.warning(f"Enhanced runner not available for {library_name}: {e}")
+            return None
+    
+    def _get_runner_for_library(self, library_name: str, use_browserforge: bool = False):
+        """
+        Get the appropriate runner for a library
+        
+        Args:
+            library_name: Name of the library
+            use_browserforge: Whether to use BrowserForge enhanced runner
+        
+        Returns:
+            Runner instance or None
+        """
+        # If BrowserForge is requested and available, try enhanced runner
+        if use_browserforge and self.browserforge_available:
+            enhanced_runner = self._get_enhanced_runner(library_name)
+            if enhanced_runner:
+                logger.info(f"🎭 Using enhanced runner for {library_name}")
+                return enhanced_runner
+            else:
+                logger.warning(f"Enhanced runner not available for {library_name}, using standard")
+        
+        # Fall back to standard runner
         runner = self.runners.get(library_name)
         
         if not runner:
-            logger.error(f"❌ No specialized runner found for: {library_name}")
+            logger.error(f"❌ No runner found for: {library_name}")
             logger.error(f"Available runners: {list(self.runners.keys())}")
+        else:
+            if use_browserforge:
+                logger.info(f"📱 Using standard runner for {library_name} (enhanced not available)")
+            else:
+                logger.info(f"📱 Using standard runner for {library_name}")
         
         return runner
     
@@ -115,7 +187,8 @@ class StealthTestOrchestrator:
         self, 
         library_name: str,
         proxy_config: Dict[str, str],
-        device: str = "iphone_x"
+        device: str = "iphone_x",
+        use_browserforge: bool = False
     ) -> List[TestResult]:
         """
         Test a single library against all target URLs
@@ -124,11 +197,19 @@ class StealthTestOrchestrator:
             library_name: Name of the library to test
             proxy_config: Proxy configuration dictionary
             device: Mobile device to emulate
+            use_browserforge: Whether to use BrowserForge enhanced fingerprints
         
         Returns:
             List of TestResult objects (one per URL)
         """
         logger.info(f"Starting test for library: {library_name}")
+        
+        if use_browserforge:
+            if self.browserforge_available:
+                logger.info(f"🎭 BrowserForge mode ENABLED for {library_name}")
+            else:
+                logger.warning(f"⚠️ BrowserForge requested but not available, using standard mode")
+                use_browserforge = False
         
         # Get library info (for logging/metadata)
         lib_info = self._get_library_info(library_name)
@@ -138,10 +219,10 @@ class StealthTestOrchestrator:
         else:
             category = lib_info.get("category", "playwright")
         
-        # Get specialized runner for this library (CRITICAL!)
-        runner = self._get_runner_for_library(library_name)
+        # Get appropriate runner (enhanced or standard)
+        runner = self._get_runner_for_library(library_name, use_browserforge=use_browserforge)
         if not runner:
-            error_msg = f"No specialized runner found for library: {library_name}"
+            error_msg = f"No runner found for library: {library_name}"
             logger.error(error_msg)
             return [TestResult(
                 library=library_name,
@@ -175,11 +256,11 @@ class StealthTestOrchestrator:
             else:
                 wait_time = 3  # Simple pages like IP check
             
-            logger.info(f"Testing {library_name} on {target_name}: {url} (wait: {wait_time}s)")
+            mode_indicator = "🎭" if use_browserforge else "📱"
+            logger.info(f"{mode_indicator} Testing {library_name} on {target_name}: {url} (wait: {wait_time}s)")
             
             try:
-                # CRITICAL: Call specialized runner's run_test method
-                # Note: Specialized runners don't take library_name parameter
+                # Call runner's run_test method
                 result = await runner.run_test(
                     url=url,
                     url_name=target_name,
@@ -207,32 +288,62 @@ class StealthTestOrchestrator:
         self, 
         library_name: str,
         proxy_config: Dict[str, str],
-        device: str = "iphone_x"
+        device: str = "iphone_x",
+        use_browserforge: bool = False
     ) -> List[TestResult]:
-        """Wrapper for test_single_library for backward compatibility"""
-        return await self.test_single_library(library_name, proxy_config, device)
+        """
+        Wrapper for test_single_library with BrowserForge support
+        
+        Args:
+            library_name: Library to test
+            proxy_config: Proxy configuration
+            device: Device to emulate
+            use_browserforge: Whether to use BrowserForge enhanced fingerprints
+        """
+        return await self.test_single_library(
+            library_name, 
+            proxy_config, 
+            device, 
+            use_browserforge=use_browserforge
+        )
     
     async def run_category_test(
         self,
         category: str,
         proxy_config: Dict[str, str],
-        device: str = "iphone_x"
+        device: str = "iphone_x",
+        use_browserforge: bool = False
     ) -> List[TestResult]:
-        """Test all libraries in a category"""
+        """
+        Test all libraries in a category
+        
+        Args:
+            category: Category name
+            proxy_config: Proxy configuration
+            device: Device to emulate
+            use_browserforge: Whether to use BrowserForge
+        """
         libraries = self.get_libraries_by_category(category)
         if not libraries:
             logger.error(f"No libraries found for category: {category}")
             return []
         
         logger.info(f"Testing {len(libraries)} libraries in category '{category}': {', '.join(libraries)}")
-        return await self.test_multiple_libraries(libraries, proxy_config, device, parallel=False)
+        return await self.test_multiple_libraries(
+            libraries, 
+            proxy_config, 
+            device, 
+            parallel=False, 
+            use_browserforge=use_browserforge
+        )
     
     async def test_multiple_libraries(
         self,
         library_names: List[str],
         proxy_config: Dict[str, str],
         device: str = "iphone_x",
-        parallel: bool = False
+        parallel: bool = False,
+        use_browserforge: bool = False
     ) -> List[TestResult]:
         """
         Test multiple libraries
@@ -242,11 +353,19 @@ class StealthTestOrchestrator:
             proxy_config: Proxy configuration
             device: Mobile device to emulate
             parallel: Whether to run tests in parallel
+            use_browserforge: Whether to use BrowserForge enhanced fingerprints
         
         Returns:
             List of all TestResult objects
         """
         logger.info(f"Starting tests for {len(library_names)} libraries")
+        
+        if use_browserforge:
+            if self.browserforge_available:
+                logger.info("🎭 BrowserForge mode ENABLED for all libraries")
+            else:
+                logger.warning("⚠️ BrowserForge requested but not available")
+                use_browserforge = False
         
         all_results = []
         
@@ -256,7 +375,12 @@ class StealthTestOrchestrator:
             
             async def run_with_semaphore(lib_name):
                 async with semaphore:
-                    return await self.test_single_library(lib_name, proxy_config, device)
+                    return await self.test_single_library(
+                        lib_name, 
+                        proxy_config, 
+                        device, 
+                        use_browserforge=use_browserforge
+                    )
             
             tasks = [run_with_semaphore(lib_name) for lib_name in library_names]
             
@@ -279,7 +403,12 @@ class StealthTestOrchestrator:
         else:
             # Run libraries sequentially
             for lib_name in library_names:
-                results = await self.test_single_library(lib_name, proxy_config, device)
+                results = await self.test_single_library(
+                    lib_name, 
+                    proxy_config, 
+                    device, 
+                    use_browserforge=use_browserforge
+                )
                 all_results.extend(results)
         
         return all_results
@@ -313,6 +442,13 @@ class StealthTestOrchestrator:
         passed = len([r for r in results if r.success])
         failed = total_tests - passed
         
+        # Check BrowserForge usage
+        browserforge_count = 0
+        for result in results:
+            additional = getattr(result, 'additional_data', {})
+            if isinstance(additional, dict) and additional.get('browserforge_enhanced'):
+                browserforge_count += 1
+        
         # Group by library
         by_library = {}
         for result in results:
@@ -325,6 +461,7 @@ class StealthTestOrchestrator:
                         "failed": 0,
                         "proxy_working": 0,
                         "mobile_ua_detected": 0,
+                        "browserforge_enhanced": 0,
                         "avg_execution_time": 0
                     }
                 }
@@ -343,6 +480,11 @@ class StealthTestOrchestrator:
             if result.is_mobile_ua:
                 lib_data["stats"]["mobile_ua_detected"] += 1
             
+            # Check BrowserForge usage
+            additional = getattr(result, 'additional_data', {})
+            if isinstance(additional, dict) and additional.get('browserforge_enhanced'):
+                lib_data["stats"]["browserforge_enhanced"] += 1
+            
             # Track execution time
             lib_data["stats"]["avg_execution_time"] += result.execution_time
         
@@ -353,6 +495,7 @@ class StealthTestOrchestrator:
                 lib_data["stats"]["success_rate"] = (lib_data["stats"]["passed"] / lib_data["stats"]["total"]) * 100
                 lib_data["stats"]["proxy_success_rate"] = (lib_data["stats"]["proxy_working"] / lib_data["stats"]["total"]) * 100
                 lib_data["stats"]["mobile_ua_rate"] = (lib_data["stats"]["mobile_ua_detected"] / lib_data["stats"]["total"]) * 100
+                lib_data["stats"]["browserforge_rate"] = (lib_data["stats"]["browserforge_enhanced"] / lib_data["stats"]["total"]) * 100
         
         # Prepare summary data
         summary_data = {
@@ -362,7 +505,9 @@ class StealthTestOrchestrator:
                 "passed": passed,
                 "failed": failed,
                 "success_rate": f"{(passed/total_tests*100):.1f}%" if total_tests > 0 else "0%",
-                "libraries_tested": len(by_library)
+                "libraries_tested": len(by_library),
+                "browserforge_enhanced_tests": browserforge_count,
+                "browserforge_enabled": browserforge_count > 0
             },
             "library_summaries": {
                 lib_name: lib_data["stats"] 
@@ -400,9 +545,19 @@ class StealthTestOrchestrator:
             results_dir = Path("test_results") / "reports"
             md_path = results_dir / f"{prefix}_{timestamp}_summary.md"
             
+            # Check BrowserForge usage
+            browserforge_count = 0
+            for result in results:
+                additional = getattr(result, 'additional_data', {})
+                if isinstance(additional, dict) and additional.get('browserforge_enhanced'):
+                    browserforge_count += 1
+            
             with open(md_path, 'w') as f:
                 f.write(f"# Playwright Stealth Testing Results\n\n")
                 f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                
+                if browserforge_count > 0:
+                    f.write(f"🎭 **BrowserForge Enhanced:** {browserforge_count}/{len(results)} tests\n\n")
                 
                 # Overall statistics
                 total = len(results)
@@ -410,7 +565,10 @@ class StealthTestOrchestrator:
                 f.write(f"## Overall Statistics\n\n")
                 f.write(f"- **Total Tests:** {total}\n")
                 f.write(f"- **Passed:** {passed} ({passed/total*100:.1f}%)\n")
-                f.write(f"- **Failed:** {total-passed} ({(total-passed)/total*100:.1f}%)\n\n")
+                f.write(f"- **Failed:** {total-passed} ({(total-passed)/total*100:.1f}%)\n")
+                if browserforge_count > 0:
+                    f.write(f"- **BrowserForge Enhanced:** {browserforge_count} ({browserforge_count/total*100:.1f}%)\n")
+                f.write("\n")
                 
                 # Group by library
                 by_lib = {}
@@ -424,9 +582,20 @@ class StealthTestOrchestrator:
                     lib_passed = len([r for r in lib_results if r.success])
                     lib_total = len(lib_results)
                     
-                    f.write(f"### {lib_name}\n\n")
+                    # Check BrowserForge usage for this library
+                    lib_bf_count = 0
+                    for r in lib_results:
+                        additional = getattr(r, 'additional_data', {})
+                        if isinstance(additional, dict) and additional.get('browserforge_enhanced'):
+                            lib_bf_count += 1
+                    
+                    bf_indicator = f" 🎭" if lib_bf_count > 0 else ""
+                    f.write(f"### {lib_name}{bf_indicator}\n\n")
                     f.write(f"- **Success Rate:** {lib_passed}/{lib_total} ({lib_passed/lib_total*100:.1f}%)\n")
                     f.write(f"- **Category:** {lib_results[0].category}\n")
+                    
+                    if lib_bf_count > 0:
+                        f.write(f"- **BrowserForge Enhanced:** {lib_bf_count}/{lib_total} tests\n")
                     
                     proxy_working = len([r for r in lib_results if r.proxy_working])
                     mobile_ua = len([r for r in lib_results if r.is_mobile_ua])
@@ -439,18 +608,33 @@ class StealthTestOrchestrator:
                     f.write(f"- **Avg Execution Time:** {avg_time:.2f}s\n\n")
                     
                     # Test details table
-                    f.write(f"| Test | Success | Proxy | Mobile UA | Time |\n")
-                    f.write(f"|------|---------|-------|-----------|------|\n")
+                    f.write(f"| Test | Success | Proxy | Mobile UA | Time | BF |\n")
+                    f.write(f"|------|---------|-------|-----------|------|----|\n")
                     for r in lib_results:
                         success_icon = "✅" if r.success else "❌"
                         proxy_icon = "🔗" if r.proxy_working else "🚫"
                         mobile_icon = "📱" if r.is_mobile_ua else "🖥️"
-                        f.write(f"| {r.test_name} | {success_icon} | {proxy_icon} | {mobile_icon} | {r.execution_time:.2f}s |\n")
+                        
+                        # Check BrowserForge for this test
+                        additional = getattr(r, 'additional_data', {})
+                        bf_icon = "🎭" if (isinstance(additional, dict) and additional.get('browserforge_enhanced')) else "📱"
+                        
+                        f.write(f"| {r.test_name} | {success_icon} | {proxy_icon} | {mobile_icon} | {r.execution_time:.2f}s | {bf_icon} |\n")
                     
                     f.write("\n")
                 
                 # Add insights section
                 f.write("## Key Insights\n\n")
+                
+                # BrowserForge insights
+                if browserforge_count > 0:
+                    f.write(f"### 🎭 BrowserForge Enhancement\n\n")
+                    f.write(f"- **Tests Enhanced:** {browserforge_count}/{total}\n")
+                    f.write(f"- **Features Applied:**\n")
+                    f.write(f"  - Intelligent User-Agent generation\n")
+                    f.write(f"  - Realistic hardware fingerprints\n")
+                    f.write(f"  - Enhanced WebGL properties\n")
+                    f.write(f"  - Consistent navigator properties\n\n")
                 
                 # Proxy effectiveness
                 total_proxy_working = len([r for r in results if r.proxy_working])
