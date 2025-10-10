@@ -71,7 +71,7 @@ jobs:
           if [ "${{ inputs.use_browserforge }}" = "true" ]; then
             echo "🎭 Installing BrowserForge for enhanced fingerprints..."
             pip install browserforge
-            python -c "from browserforge import FingerprintGenerator; print('✅ BrowserForge verified')"
+            python -c "from browserforge.fingerprints import FingerprintGenerator; print('✅ BrowserForge verified')"
           else
             echo "📱 Using standard runners (BrowserForge disabled)"
           fi
