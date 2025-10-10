@@ -188,15 +188,15 @@ class ScreenshotEngine:
     ) -> Optional[str]:
         """Capture screenshot after wait (sync version for Selenium)"""
         try:
-            # Intelligent wait based on page
+            # Intelligent wait based on page (TESTING: 15s to see if pages load faster)
             wait_config = {
-                'pixelscan': 45,
-                'fingerprint': 45,
-                'ip_check': 35,
-                'bot_check': 35,
-                'creepjs': 30,
-                'workers': 25,
-                'ip': 30,
+                'pixelscan': 15,     # Testing shorter wait
+                'fingerprint': 15,   # Testing shorter wait
+                'ip_check': 15,      # Testing shorter wait
+                'bot_check': 15,     # Testing shorter wait
+                'creepjs': 15,       # Testing shorter wait
+                'workers': 15,       # Testing shorter wait
+                'ip': 15,            # Testing shorter wait
             }
             
             for keyword, wait in wait_config.items():
