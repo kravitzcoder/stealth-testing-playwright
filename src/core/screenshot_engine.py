@@ -190,11 +190,11 @@ class ScreenshotEngine:
         try:
             # Intelligent wait based on page
             wait_config = {
-                'pixelscan: 45,
-                'fingerprint: 45,
-                'ip_check: 35,
-                'bot_check: 35,
-                'creepjs: 30,
+                'pixelscan': 45,
+                'fingerprint': 45,
+                'ip_check': 35,
+                'bot_check': 35,
+                'creepjs': 30,
                 'workers': 25,
                 'ip': 30,
             }
