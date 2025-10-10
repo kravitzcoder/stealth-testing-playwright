@@ -6,6 +6,7 @@ Contains common code used by all specialized runners:
 - IP detection
 - Mobile UA checking
 - Screenshot coordination
+- WebRTC blocking (UNIVERSAL)
 """
 
 import logging
@@ -39,6 +40,116 @@ class BaseRunner:
                 logger.debug("GeoIP database loaded")
         except (ImportError, Exception):
             pass
+    
+    def _get_universal_webrtc_blocker(self) -> str:
+        """
+        Universal WebRTC blocking script
+        
+        Works across all libraries (Playwright, Patchright, Camoufox, Rebrowser)
+        
+        Blocks:
+        - RTCPeerConnection
+        - getUserMedia
+        - WebRTC data channels
+        - STUN/TURN connections
+        """
+        return """
+(function() {
+    'use strict';
+    
+    console.log('[WebRTC Blocker] Universal blocking enabled');
+    
+    // Block RTCPeerConnection
+    if (typeof RTCPeerConnection !== 'undefined') {
+        window.RTCPeerConnection = function() {
+            console.log('[WebRTC Blocker] RTCPeerConnection blocked');
+            throw new Error('RTCPeerConnection is disabled for privacy');
+        };
+        
+        Object.defineProperty(window, 'RTCPeerConnection', {
+            get: function() {
+                return function() {
+                    throw new Error('RTCPeerConnection is disabled');
+                };
+            },
+            set: function() {},
+            configurable: false
+        });
+    }
+    
+    // Block webkitRTCPeerConnection (Safari/older Chrome)
+    if (typeof webkitRTCPeerConnection !== 'undefined') {
+        window.webkitRTCPeerConnection = function() {
+            throw new Error('webkitRTCPeerConnection is disabled');
+        };
+        
+        Object.defineProperty(window, 'webkitRTCPeerConnection', {
+            get: function() {
+                return function() {
+                    throw new Error('webkitRTCPeerConnection is disabled');
+                };
+            },
+            set: function() {},
+            configurable: false
+        });
+    }
+    
+    // Block getUserMedia (prevents camera/mic access)
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia = function() {
+            console.log('[WebRTC Blocker] getUserMedia blocked');
+            return Promise.reject(new Error('getUserMedia is disabled'));
+        };
+    }
+    
+    // Block legacy getUserMedia
+    if (navigator.getUserMedia) {
+        navigator.getUserMedia = function(constraints, success, error) {
+            console.log('[WebRTC Blocker] Legacy getUserMedia blocked');
+            if (error) {
+                error(new Error('getUserMedia is disabled'));
+            }
+        };
+    }
+    
+    // Block mozGetUserMedia (Firefox)
+    if (navigator.mozGetUserMedia) {
+        navigator.mozGetUserMedia = function() {
+            return Promise.reject(new Error('mozGetUserMedia is disabled'));
+        };
+    }
+    
+    // Block webkitGetUserMedia (Safari/older Chrome)
+    if (navigator.webkitGetUserMedia) {
+        navigator.webkitGetUserMedia = function() {
+            return Promise.reject(new Error('webkitGetUserMedia is disabled'));
+        };
+    }
+    
+    // Block RTCDataChannel
+    if (typeof RTCDataChannel !== 'undefined') {
+        window.RTCDataChannel = function() {
+            throw new Error('RTCDataChannel is disabled');
+        };
+    }
+    
+    // Block RTCSessionDescription (return empty to avoid detection)
+    if (typeof RTCSessionDescription !== 'undefined') {
+        window.RTCSessionDescription = function() {
+            return {};
+        };
+    }
+    
+    // Block RTCIceCandidate (return empty to avoid detection)
+    if (typeof RTCIceCandidate !== 'undefined') {
+        window.RTCIceCandidate = function() {
+            return {};
+        };
+    }
+    
+    console.log('[WebRTC Blocker] ✅ All WebRTC APIs blocked');
+})();
+        """
     
     def _build_proxy(self, proxy_config: Dict[str, str]) -> Optional[Dict[str, Any]]:
         """
