@@ -8,13 +8,12 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 try:
-    from browserforge.fingerprints import FingerprintGenerator
-    from browserforge.fingerprints import Fingerprint
+    from browserforge.fingerprints import FingerprintGenerator, Screen
     BROWSERFORGE_AVAILABLE = True
 except ImportError:
     BROWSERFORGE_AVAILABLE = False
     FingerprintGenerator = None
-    Fingerprint = None
+    Screen = None
     logging.warning("BrowserForge not installed. Install with: pip install browserforge")
 
 from .device_profile_loader import DeviceProfileLoader
@@ -92,18 +91,24 @@ class BrowserForgeManager:
             browsers = ['safari']
             operating_systems = ['ios']
         
-        # Generate BrowserForge fingerprint with constraints
+        # Create Screen object for BrowserForge (CRITICAL FIX!)
+        viewport_width = base_config['viewport']['width']
+        viewport_height = base_config['viewport']['height']
+        
+        screen = Screen(
+            min_width=viewport_width - 10,
+            max_width=viewport_width + 10,
+            min_height=viewport_height - 10,
+            max_height=viewport_height + 10
+        )
+        
+        # Generate BrowserForge fingerprint with proper parameters
         fingerprint = self.fp_generator.generate(
-            screen={
-                'min_width': base_config['viewport']['width'] - 10,
-                'max_width': base_config['viewport']['width'] + 10,
-                'min_height': base_config['viewport']['height'] - 10,
-                'max_height': base_config['viewport']['height'] + 10,
-            },
+            screen=screen,
             strict=False,
-            browsers=browsers,
-            operating_systems=operating_systems,
-            devices=['mobile']
+            browser=browsers,
+            os=operating_systems,
+            device='mobile'
         )
         
         # Merge BrowserForge enhancements with base config
@@ -112,21 +117,21 @@ class BrowserForgeManager:
         # Update with BrowserForge values where they're more sophisticated
         enhanced_config.update({
             # BrowserForge provides more realistic user agent
-            'user_agent': fingerprint.navigator.user_agent,
+            'user_agent': fingerprint.navigator.userAgent,
             
             # Enhanced navigator properties
             'platform': fingerprint.navigator.platform,
-            'hardware_concurrency': fingerprint.navigator.hardware_concurrency,
-            'device_memory': fingerprint.navigator.device_memory,
-            'max_touch_points': fingerprint.navigator.max_touch_points,
+            'hardware_concurrency': fingerprint.navigator.hardwareConcurrency,
+            'device_memory': fingerprint.navigator.deviceMemory,
+            'max_touch_points': fingerprint.navigator.maxTouchPoints,
             
             # BrowserForge language preferences
             'language': fingerprint.navigator.language,
             'languages': fingerprint.navigator.languages,
             
             # Enhanced WebGL fingerprinting
-            'webgl_vendor': fingerprint.navigator.webgl.vendor if fingerprint.navigator.webgl else base_config.get('webgl_vendor'),
-            'webgl_renderer': fingerprint.navigator.webgl.renderer if fingerprint.navigator.webgl else base_config.get('webgl_renderer'),
+            'webgl_vendor': fingerprint.videoCard.vendor if fingerprint.videoCard else base_config.get('webgl_vendor'),
+            'webgl_renderer': fingerprint.videoCard.renderer if fingerprint.videoCard else base_config.get('webgl_renderer'),
             
             # Screen properties from BrowserForge
             'screen_width': fingerprint.screen.width,
@@ -146,7 +151,7 @@ class BrowserForgeManager:
             
             # Add BrowserForge metadata
             '_browserforge_enhanced': True,
-            '_browserforge_fingerprint_id': getattr(fingerprint, 'fingerprint_id', 'unknown')
+            '_browserforge_version': '1.2.3'
         })
         
         return enhanced_config
@@ -154,7 +159,7 @@ class BrowserForgeManager:
     def get_browserforge_fingerprint_only(
         self,
         device_type: str = "mobile"
-    ) -> Optional['Fingerprint']:
+    ) -> Optional[Any]:
         """
         Get raw BrowserForge fingerprint (for advanced usage)
         
@@ -170,13 +175,13 @@ class BrowserForgeManager:
         try:
             if device_type == "mobile":
                 fingerprint = self.fp_generator.generate(
-                    devices=['mobile'],
-                    operating_systems=['ios', 'android'],
+                    device='mobile',
+                    os=('ios', 'android'),
                     strict=False
                 )
             else:
                 fingerprint = self.fp_generator.generate(
-                    devices=['desktop'],
+                    device='desktop',
                     strict=False
                 )
             
