@@ -8,10 +8,13 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 try:
-    from browserforge import FingerprintGenerator, Fingerprint
+    from browserforge.fingerprints import FingerprintGenerator
+    from browserforge.fingerprints import Fingerprint
     BROWSERFORGE_AVAILABLE = True
 except ImportError:
     BROWSERFORGE_AVAILABLE = False
+    FingerprintGenerator = None
+    Fingerprint = None
     logging.warning("BrowserForge not installed. Install with: pip install browserforge")
 
 from .device_profile_loader import DeviceProfileLoader
