@@ -1,14 +1,15 @@
 """
-BASE RUNNER - Enhanced with BrowserForge and Session Management
+BASE RUNNER - Enhanced with BrowserForge (WebRTC via BrowserForge only)
 
 Contains common code used by all specialized runners:
 - Proxy configuration
 - IP detection
 - Mobile UA checking
 - Screenshot coordination
-- WebRTC blocking (UNIVERSAL)
 - BrowserForge fingerprint enhancement
 - Session management for device consistency
+
+NO custom WebRTC blocking - uses BrowserForge's native approach
 """
 
 import logging
@@ -37,11 +38,11 @@ class BaseRunner:
         # Log fingerprint capabilities
         stats = self.browserforge.get_fingerprint_stats()
         if stats['browserforge_available']:
-            logger.info("🎭 BrowserForge enhancement enabled")
+            logger.info("🎭 BrowserForge enhancement enabled (with WebRTC support)")
         else:
             logger.warning("⚠️ BrowserForge not available - using basic profiles")
         
-        # Session management (NEW!)
+        # Session management
         self._session_started = False
         
         # Optional GeoIP support
@@ -84,17 +85,17 @@ class BaseRunner:
         self,
         mobile_config: Dict[str, Any],
         device_type: str = "iphone_x",
-        use_browserforge: bool = True
+        use_browserforge: bool = True,
+        proxy_ip: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get enhanced mobile config with BrowserForge fingerprints
-        
-        UPDATED: Now uses session-consistent device
         
         Args:
             mobile_config: Base mobile config from test_targets.json (NOT USED if session active)
             device_type: Device type for profile selection
             use_browserforge: Whether to apply BrowserForge enhancement
+            proxy_ip: Proxy IP address for WebRTC configuration
         
         Returns:
             Enhanced mobile configuration (SESSION CONSISTENT)
@@ -105,10 +106,11 @@ class BaseRunner:
             self.start_session(device_type)
         
         if use_browserforge and self.browserforge.is_browserforge_available():
-            # Generate enhanced fingerprint (uses session device!)
+            # Generate enhanced fingerprint with proxy IP for WebRTC
             enhanced = self.browserforge.generate_enhanced_fingerprint(
                 device_type=device_type,
-                use_browserforge=True
+                use_browserforge=True,
+                proxy_ip=proxy_ip
             )
             
             return enhanced
@@ -116,120 +118,15 @@ class BaseRunner:
             # Fallback to session config (still consistent!)
             session_config = self.browserforge.get_session_config()
             if session_config:
+                # Add proxy IP even for basic config
+                if proxy_ip:
+                    session_config['_proxy_ip'] = proxy_ip
                 return session_config
             else:
                 # Last resort: use provided config
+                if proxy_ip:
+                    mobile_config['_proxy_ip'] = proxy_ip
                 return mobile_config
-    
-    def _get_universal_webrtc_blocker(self) -> str:
-        """
-        Universal WebRTC blocking script
-        
-        Works across all libraries (Playwright, Patchright, Camoufox, Rebrowser)
-        
-        Blocks:
-        - RTCPeerConnection
-        - getUserMedia
-        - WebRTC data channels
-        - STUN/TURN connections
-        """
-        return """
-(function() {
-    'use strict';
-    
-    console.log('[WebRTC Blocker] Universal blocking enabled');
-    
-    // Block RTCPeerConnection
-    if (typeof RTCPeerConnection !== 'undefined') {
-        window.RTCPeerConnection = function() {
-            console.log('[WebRTC Blocker] RTCPeerConnection blocked');
-            throw new Error('RTCPeerConnection is disabled for privacy');
-        };
-        
-        Object.defineProperty(window, 'RTCPeerConnection', {
-            get: function() {
-                return function() {
-                    throw new Error('RTCPeerConnection is disabled');
-                };
-            },
-            set: function() {},
-            configurable: false
-        });
-    }
-    
-    // Block webkitRTCPeerConnection (Safari/older Chrome)
-    if (typeof webkitRTCPeerConnection !== 'undefined') {
-        window.webkitRTCPeerConnection = function() {
-            throw new Error('webkitRTCPeerConnection is disabled');
-        };
-        
-        Object.defineProperty(window, 'webkitRTCPeerConnection', {
-            get: function() {
-                return function() {
-                    throw new Error('webkitRTCPeerConnection is disabled');
-                };
-            },
-            set: function() {},
-            configurable: false
-        });
-    }
-    
-    // Block getUserMedia (prevents camera/mic access)
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia = function() {
-            console.log('[WebRTC Blocker] getUserMedia blocked');
-            return Promise.reject(new Error('getUserMedia is disabled'));
-        };
-    }
-    
-    // Block legacy getUserMedia
-    if (navigator.getUserMedia) {
-        navigator.getUserMedia = function(constraints, success, error) {
-            console.log('[WebRTC Blocker] Legacy getUserMedia blocked');
-            if (error) {
-                error(new Error('getUserMedia is disabled'));
-            }
-        };
-    }
-    
-    // Block mozGetUserMedia (Firefox)
-    if (navigator.mozGetUserMedia) {
-        navigator.mozGetUserMedia = function() {
-            return Promise.reject(new Error('mozGetUserMedia is disabled'));
-        };
-    }
-    
-    // Block webkitGetUserMedia (Safari/older Chrome)
-    if (navigator.webkitGetUserMedia) {
-        navigator.webkitGetUserMedia = function() {
-            return Promise.reject(new Error('webkitGetUserMedia is disabled'));
-        };
-    }
-    
-    // Block RTCDataChannel
-    if (typeof RTCDataChannel !== 'undefined') {
-        window.RTCDataChannel = function() {
-            throw new Error('RTCDataChannel is disabled');
-        };
-    }
-    
-    // Block RTCSessionDescription (return empty to avoid detection)
-    if (typeof RTCSessionDescription !== 'undefined') {
-        window.RTCSessionDescription = function() {
-            return {};
-        };
-    }
-    
-    // Block RTCIceCandidate (return empty to avoid detection)
-    if (typeof RTCIceCandidate !== 'undefined') {
-        window.RTCIceCandidate = function() {
-            return {};
-        };
-    }
-    
-    console.log('[WebRTC Blocker] ✅ All WebRTC APIs blocked');
-})();
-        """
     
     def _build_proxy(self, proxy_config: Dict[str, str]) -> Optional[Dict[str, Any]]:
         """
