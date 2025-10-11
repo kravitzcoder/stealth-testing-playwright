@@ -243,7 +243,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
     // Battery API (mobile-like behavior)
     if (navigator.getBattery) {{
         navigator.getBattery = async () => ({{
-            charging: {enhanced_config.get('battery_charging', 'false').lower()},
+            charging: {str(enhanced_config.get('battery_charging', False)).lower()},
             chargingTime: Infinity,
             dischargingTime: 28800,
             level: {enhanced_config.get('battery_level', 0.75)},
