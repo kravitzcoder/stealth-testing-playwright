@@ -231,12 +231,10 @@ class BrowserForgeManager:
         enhanced_config: Dict[str, Any]
     ) -> str:
         """
-        Generate BrowserForge-compatible WebRTC protection script
+        Generate AGGRESSIVE WebRTC protection script
         
-        This uses a more intelligent approach:
-        - Allows WebRTC to function normally
-        - Masks the real IP with proxy IP
-        - Doesn't break detection sites
+        This completely disables WebRTC to prevent ANY IP leaks
+        Trade-off: Some WebRTC-dependent features won't work, but IP is protected
         
         Args:
             enhanced_config: Enhanced config with proxy IP
@@ -250,84 +248,119 @@ class BrowserForgeManager:
 (function() {{
     'use strict';
     
-    console.log('[BrowserForge WebRTC] Native WebRTC masking enabled');
+    console.log('[BrowserForge WebRTC] AGGRESSIVE protection mode enabled');
+    console.log('[BrowserForge WebRTC] Target proxy IP: {proxy_ip}');
     
-    // Store original RTCPeerConnection
-    const OriginalRTCPeerConnection = window.RTCPeerConnection || 
-                                      window.webkitRTCPeerConnection || 
-                                      window.mozRTCPeerConnection;
+    // COMPLETE WebRTC DISABLE - Most reliable way to prevent leaks
     
-    if (!OriginalRTCPeerConnection) {{
-        console.log('[BrowserForge WebRTC] RTCPeerConnection not available');
-        return;
+    // Remove RTCPeerConnection completely
+    if (typeof RTCPeerConnection !== 'undefined') {{
+        delete window.RTCPeerConnection;
+        
+        // Make it return undefined
+        Object.defineProperty(window, 'RTCPeerConnection', {{
+            get: function() {{
+                console.log('[BrowserForge WebRTC] RTCPeerConnection access blocked');
+                return undefined;
+            }},
+            set: function() {{}},
+            configurable: false,
+            enumerable: false
+        }});
     }}
     
-    // Create wrapped RTCPeerConnection
-    const WrappedRTCPeerConnection = function(config, constraints) {{
-        console.log('[BrowserForge WebRTC] Creating connection with proxy IP masking');
+    // Block webkitRTCPeerConnection
+    if (typeof webkitRTCPeerConnection !== 'undefined') {{
+        delete window.webkitRTCPeerConnection;
         
-        // Modify config to use proxy
-        if (!config) {{
-            config = {{}};
-        }}
+        Object.defineProperty(window, 'webkitRTCPeerConnection', {{
+            get: function() {{
+                console.log('[BrowserForge WebRTC] webkitRTCPeerConnection access blocked');
+                return undefined;
+            }},
+            set: function() {{}},
+            configurable: false,
+            enumerable: false
+        }});
+    }}
+    
+    // Block mozRTCPeerConnection (Firefox)
+    if (typeof mozRTCPeerConnection !== 'undefined') {{
+        delete window.mozRTCPeerConnection;
         
-        // Force relay mode to use proxy
-        config.iceTransportPolicy = 'relay';
-        
-        // Filter out STUN servers (they can leak real IP)
-        if (config.iceServers) {{
-            config.iceServers = config.iceServers.filter(server => {{
-                const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
-                return !urls.some(url => url.includes('stun:'));
-            }});
-        }}
-        
-        // Create connection
-        const pc = new OriginalRTCPeerConnection(config, constraints);
-        
-        // Intercept ICE candidate gathering
-        const originalAddIceCandidate = pc.addIceCandidate.bind(pc);
-        pc.addIceCandidate = function(candidate) {{
-            if (candidate && candidate.candidate) {{
-                // Block local candidates (they contain real IP)
-                if (candidate.candidate.includes('typ host') || 
-                    candidate.candidate.includes('typ srflx')) {{
-                    console.log('[BrowserForge WebRTC] Blocked local candidate');
-                    return Promise.resolve();
-                }}
-            }}
-            return originalAddIceCandidate(candidate);
+        Object.defineProperty(window, 'mozRTCPeerConnection', {{
+            get: function() {{
+                console.log('[BrowserForge WebRTC] mozRTCPeerConnection access blocked');
+                return undefined;
+            }},
+            set: function() {{}},
+            configurable: false,
+            enumerable: false
+        }});
+    }}
+    
+    // Block getUserMedia (prevents camera/microphone access that can leak)
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
+        const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
+        navigator.mediaDevices.getUserMedia = function() {{
+            console.log('[BrowserForge WebRTC] getUserMedia blocked');
+            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
         }};
-        
-        // Intercept SDP to mask IP
-        const originalSetLocalDescription = pc.setLocalDescription.bind(pc);
-        pc.setLocalDescription = function(description) {{
-            if (description && description.sdp) {{
-                // This would normally mask the IP in SDP
-                // For now, we rely on relay mode
-                console.log('[BrowserForge WebRTC] SDP processed');
+    }}
+    
+    // Block legacy getUserMedia
+    if (navigator.getUserMedia) {{
+        navigator.getUserMedia = function(constraints, success, error) {{
+            console.log('[BrowserForge WebRTC] Legacy getUserMedia blocked');
+            if (error) {{
+                error(new DOMException('Permission denied', 'NotAllowedError'));
             }}
-            return originalSetLocalDescription(description);
         }};
-        
-        return pc;
-    }};
-    
-    // Copy prototype
-    WrappedRTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
-    
-    // Replace global RTCPeerConnection
-    window.RTCPeerConnection = WrappedRTCPeerConnection;
-    
-    if (window.webkitRTCPeerConnection) {{
-        window.webkitRTCPeerConnection = WrappedRTCPeerConnection;
     }}
     
-    if (window.mozRTCPeerConnection) {{
-        window.mozRTCPeerConnection = WrappedRTCPeerConnection;
+    // Block mozGetUserMedia
+    if (navigator.mozGetUserMedia) {{
+        navigator.mozGetUserMedia = function() {{
+            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
     }}
     
-    console.log('[BrowserForge WebRTC] ✅ WebRTC protection active (relay mode + IP masking)');
+    // Block webkitGetUserMedia
+    if (navigator.webkitGetUserMedia) {{
+        navigator.webkitGetUserMedia = function() {{
+            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    // Block RTCDataChannel
+    if (typeof RTCDataChannel !== 'undefined') {{
+        delete window.RTCDataChannel;
+        Object.defineProperty(window, 'RTCDataChannel', {{
+            get: () => undefined,
+            configurable: false
+        }});
+    }}
+    
+    // Block RTCSessionDescription
+    if (typeof RTCSessionDescription !== 'undefined') {{
+        delete window.RTCSessionDescription;
+        Object.defineProperty(window, 'RTCSessionDescription', {{
+            get: () => undefined,
+            configurable: false
+        }});
+    }}
+    
+    // Block RTCIceCandidate
+    if (typeof RTCIceCandidate !== 'undefined') {{
+        delete window.RTCIceCandidate;
+        Object.defineProperty(window, 'RTCIceCandidate', {{
+            get: () => undefined,
+            configurable: false
+        }});
+    }}
+    
+    console.log('[BrowserForge WebRTC] ✅ COMPLETE WebRTC blocking active');
+    console.log('[BrowserForge WebRTC] ✅ No IP leaks possible - all WebRTC APIs disabled');
 }})();
         """
         
