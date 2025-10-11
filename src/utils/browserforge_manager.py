@@ -318,83 +318,148 @@ class BrowserForgeManager:
         webrtc_script = ""
         if mock_webrtc and proxy_ip:
             webrtc_script = f"""
-            // BrowserForge WebRTC Mocking
+            // BrowserForge WebRTC IP Masking (Non-blocking approach)
             (function() {{
                 const proxyIP = '{proxy_ip}';
+                console.log('[WebRTC] Masking enabled for proxy IP:', proxyIP);
                 
-                // Override RTCPeerConnection
+                // Override RTCPeerConnection to mask IPs in candidates
                 const OriginalRTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
                 
-                if (OriginalRTCPeerConnection) {{
-                    window.RTCPeerConnection = new Proxy(OriginalRTCPeerConnection, {{
-                        construct(target, args) {{
-                            const pc = new target(...args);
-                            
-                            // Override createDataChannel to prevent leaks
-                            const originalCreateDataChannel = pc.createDataChannel;
-                            pc.createDataChannel = function(...args) {{
-                                return originalCreateDataChannel.apply(this, args);
-                            }};
-                            
-                            // Override createOffer to inject fake candidates
-                            const originalCreateOffer = pc.createOffer;
-                            pc.createOffer = async function(...args) {{
-                                const offer = await originalCreateOffer.apply(this, args);
-                                
-                                // Modify SDP to only show proxy IP
-                                if (offer && offer.sdp && proxyIP) {{
-                                    offer.sdp = offer.sdp.replace(/c=IN IP4 \\d+\\.\\d+\\.\\d+\\.\\d+/g, 'c=IN IP4 ' + proxyIP);
-                                    offer.sdp = offer.sdp.replace(/a=candidate:.*?\\d+\\.\\d+\\.\\d+\\.\\d+.*?\\r\\n/g, function(match) {{
-                                        return match.replace(/\\d+\\.\\d+\\.\\d+\\.\\d+/g, proxyIP);
-                                    }});
-                                }}
-                                
-                                return offer;
-                            }};
-                            
-                            // Override onicecandidate to filter local IPs
-                            const originalOnIceCandidate = pc.onicecandidate;
-                            Object.defineProperty(pc, 'onicecandidate', {{
-                                get: function() {{ return this._onicecandidate; }},
-                                set: function(handler) {{
-                                    this._onicecandidate = handler;
-                                    pc.addEventListener('icecandidate', function(event) {{
-                                        if (event.candidate && event.candidate.candidate) {{
-                                            // Filter out local IP addresses
-                                            const candidateStr = event.candidate.candidate;
-                                            if (candidateStr.includes('192.168.') || 
-                                                candidateStr.includes('10.') || 
-                                                candidateStr.includes('172.') ||
-                                                candidateStr.includes('127.0.0.1') ||
-                                                candidateStr.includes('::1')) {{
-                                                return; // Don't fire event for local IPs
-                                            }}
+                if (!OriginalRTCPeerConnection) {{
+                    console.log('[WebRTC] No RTCPeerConnection available');
+                    return;
+                }}
+                
+                // Helper function to check if IP is private/local
+                function isPrivateIP(ip) {{
+                    return ip.startsWith('192.168.') || 
+                           ip.startsWith('10.') || 
+                           ip.startsWith('172.16.') || 
+                           ip.startsWith('172.17.') || 
+                           ip.startsWith('172.18.') || 
+                           ip.startsWith('172.19.') || 
+                           ip.startsWith('172.2') || 
+                           ip.startsWith('172.3') ||
+                           ip.startsWith('127.0.0.1') ||
+                           ip.startsWith('0.0.0.0') ||
+                           ip === '::1' ||
+                           ip.startsWith('fe80:') ||
+                           ip.startsWith('fc00:') ||
+                           ip.startsWith('fd00:');
+                }}
+                
+                // Override RTCPeerConnection
+                window.RTCPeerConnection = function(config) {{
+                    const pc = new OriginalRTCPeerConnection(config);
+                    
+                    // Intercept onicecandidate
+                    const originalOnIceCandidate = Object.getOwnPropertyDescriptor(
+                        Object.getPrototypeOf(pc), 'onicecandidate'
+                    );
+                    
+                    Object.defineProperty(pc, 'onicecandidate', {{
+                        get: function() {{
+                            return this._onicecandidate;
+                        }},
+                        set: function(handler) {{
+                            this._onicecandidate = function(event) {{
+                                if (event.candidate && event.candidate.candidate) {{
+                                    const candidateStr = event.candidate.candidate;
+                                    
+                                    // Extract IP from candidate string
+                                    const ipMatch = candidateStr.match(/\\b(?:\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}|[0-9a-f:]+)\\b/i);
+                                    
+                                    if (ipMatch && ipMatch[0]) {{
+                                        const detectedIP = ipMatch[0];
+                                        
+                                        // If it's a private IP, replace with proxy IP
+                                        if (isPrivateIP(detectedIP)) {{
+                                            // Replace private IP with proxy IP in the candidate string
+                                            const newCandidate = candidateStr.replace(detectedIP, proxyIP);
                                             
-                                            // Replace any remaining IPs with proxy IP
-                                            if (proxyIP) {{
-                                                event.candidate.candidate = candidateStr.replace(/\\d+\\.\\d+\\.\\d+\\.\\d+/g, proxyIP);
+                                            // Create a modified candidate object
+                                            try {{
+                                                const modifiedEvent = {{
+                                                    candidate: {{
+                                                        candidate: newCandidate,
+                                                        sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                                        sdpMid: event.candidate.sdpMid,
+                                                        foundation: event.candidate.foundation,
+                                                        component: event.candidate.component,
+                                                        priority: event.candidate.priority,
+                                                        address: proxyIP,
+                                                        protocol: event.candidate.protocol,
+                                                        port: event.candidate.port,
+                                                        type: event.candidate.type,
+                                                        tcpType: event.candidate.tcpType,
+                                                        relatedAddress: event.candidate.relatedAddress,
+                                                        relatedPort: event.candidate.relatedPort,
+                                                        usernameFragment: event.candidate.usernameFragment
+                                                    }}
+                                                }};
+                                                
+                                                console.log('[WebRTC] Masked private IP:', detectedIP, '→', proxyIP);
+                                                return handler(modifiedEvent);
+                                            }} catch (e) {{
+                                                console.log('[WebRTC] Failed to modify candidate:', e);
                                             }}
                                         }}
-                                        
-                                        if (handler) handler(event);
-                                    }});
+                                    }}
                                 }}
-                            }});
-                            
-                            return pc;
+                                
+                                // Call original handler with original or modified event
+                                if (handler) return handler(event);
+                            }};
                         }}
                     }});
                     
-                    // Also set webkit and moz variants
-                    if (window.webkitRTCPeerConnection) {{
-                        window.webkitRTCPeerConnection = window.RTCPeerConnection;
-                    }}
-                    if (window.mozRTCPeerConnection) {{
-                        window.mozRTCPeerConnection = window.RTCPeerConnection;
-                    }}
+                    // Also intercept addEventListener for 'icecandidate'
+                    const originalAddEventListener = pc.addEventListener;
+                    pc.addEventListener = function(type, listener, ...args) {{
+                        if (type === 'icecandidate') {{
+                            const wrappedListener = function(event) {{
+                                if (event.candidate && event.candidate.candidate) {{
+                                    const candidateStr = event.candidate.candidate;
+                                    const ipMatch = candidateStr.match(/\\b(?:\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}|[0-9a-f:]+)\\b/i);
+                                    
+                                    if (ipMatch && ipMatch[0] && isPrivateIP(ipMatch[0])) {{
+                                        // Replace private IP
+                                        const newCandidate = candidateStr.replace(ipMatch[0], proxyIP);
+                                        try {{
+                                            event.candidate.candidate = newCandidate;
+                                            if (event.candidate.address) {{
+                                                event.candidate.address = proxyIP;
+                                            }}
+                                            console.log('[WebRTC] Masked IP in listener:', ipMatch[0], '→', proxyIP);
+                                        }} catch (e) {{
+                                            console.log('[WebRTC] Could not modify candidate in listener:', e);
+                                        }}
+                                    }}
+                                }}
+                                return listener(event);
+                            }};
+                            return originalAddEventListener.call(this, type, wrappedListener, ...args);
+                        }}
+                        return originalAddEventListener.call(this, type, listener, ...args);
+                    }};
                     
-                    console.log('[BrowserForge] WebRTC protection enabled for IP:', proxyIP);
+                    return pc;
+                }};
+                
+                // Copy prototype and static properties
+                window.RTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
+                Object.setPrototypeOf(window.RTCPeerConnection, OriginalRTCPeerConnection);
+                
+                // Set webkit and moz variants
+                if (window.webkitRTCPeerConnection) {{
+                    window.webkitRTCPeerConnection = window.RTCPeerConnection;
                 }}
+                if (window.mozRTCPeerConnection) {{
+                    window.mozRTCPeerConnection = window.RTCPeerConnection;
+                }}
+                
+                console.log('[WebRTC] ✅ IP masking active - private IPs will show as:', proxyIP);
             }})();
             """
         
