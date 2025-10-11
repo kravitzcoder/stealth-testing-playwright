@@ -300,6 +300,20 @@ class BrowserForgeManager:
         proxy_ip = enhanced_config.get('_proxy_ip', '')
         mock_webrtc = enhanced_config.get('_browserforge_webrtc_mock', False)
         
+        # Build WebGL script if available (do this BEFORE the main f-string)
+        webgl_script = ""
+        if fingerprint.videoCard:
+            webgl_vendor = fingerprint.videoCard.vendor if fingerprint.videoCard.vendor else "Apple Inc."
+            webgl_renderer = fingerprint.videoCard.renderer if fingerprint.videoCard.renderer else "Apple GPU"
+            webgl_script = f"""
+            const getParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {{
+                if (parameter === 37445) return '{webgl_vendor}';
+                if (parameter === 37446) return '{webgl_renderer}';
+                return getParameter.call(this, parameter);
+            }};
+            """
+        
         # Build WebRTC mocking script if enabled
         webrtc_script = ""
         if mock_webrtc and proxy_ip:
@@ -428,14 +442,7 @@ class BrowserForgeManager:
             }});
             
             // WebGL overrides if available
-            {f"""
-            const getParameter = WebGLRenderingContext.prototype.getParameter;
-            WebGLRenderingContext.prototype.getParameter = function(parameter) {{
-                if (parameter === 37445) return '{fingerprint.videoCard.vendor if fingerprint.videoCard else "Apple Inc."}';
-                if (parameter === 37446) return '{fingerprint.videoCard.renderer if fingerprint.videoCard else "Apple GPU"}';
-                return getParameter.call(this, parameter);
-            }};
-            """ if fingerprint.videoCard else ""}
+            {webgl_script}
             
             // Screen overrides
             Object.defineProperty(screen, 'width', {{
