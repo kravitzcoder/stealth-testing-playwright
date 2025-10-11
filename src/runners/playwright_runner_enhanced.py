@@ -95,10 +95,13 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                     geolocation={"latitude": 37.7749, "longitude": -122.4194}
                 )
                 
-                # Apply BrowserForge stealth + native WebRTC
+                # Apply BrowserForge stealth with proper WebRTC injection
                 await self._apply_browserforge_stealth(context, enhanced_config)
                 
                 page = await context.new_page()
+                
+                # Additional page-level injection if needed
+                await self.browserforge.inject_fingerprint_to_page(page, enhanced_config)
                 
                 logger.info(f"Navigating to {url}")
                 await page.goto(url, wait_until="networkidle", timeout=60000)
@@ -114,6 +117,21 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 # Check results
                 proxy_working, detected_ip = await self._check_proxy(page, proxy_config)
                 is_mobile = await self._check_mobile_ua(page, enhanced_config)
+                
+                # Debug: Check WebRTC status
+                try:
+                    webrtc_ips = await page.evaluate("""
+                        () => {
+                            // Try to detect WebRTC leak
+                            if (typeof RTCPeerConnection !== 'undefined') {
+                                return 'RTCPeerConnection exists';
+                            }
+                            return 'No RTCPeerConnection';
+                        }
+                    """)
+                    logger.debug(f"WebRTC check: {webrtc_ips}")
+                except:
+                    pass
                 
                 await browser.close()
                 
@@ -157,10 +175,15 @@ class PlaywrightRunnerEnhanced(BaseRunner):
     
     async def _apply_browserforge_stealth(self, context, enhanced_config: Dict[str, Any]):
         """
-        Apply BrowserForge stealth + native WebRTC protection
+        Apply BrowserForge stealth with native WebRTC protection
         
-        This uses ONLY BrowserForge's approach - no custom blocking
+        This combines BrowserForge's fingerprint injection with additional stealth
         """
+        
+        # Get BrowserForge injection script if available
+        browserforge_script = self.browserforge.get_browserforge_injection_script(enhanced_config)
+        
+        # Prepare additional stealth overrides
         platform = enhanced_config.get('platform', 'iPhone')
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
         device_memory = enhanced_config.get('device_memory', 4)
@@ -172,83 +195,69 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         # Convert languages list to JavaScript array string
         languages_str = str(languages).replace("'", '"')
         
-        # Get BrowserForge WebRTC script if enabled
-        webrtc_script = ""
-        if enhanced_config.get('_browserforge_webrtc_enabled'):
-            webrtc_script = self.browserforge.get_browserforge_webrtc_script(enhanced_config)
-        
-        script = f"""
+        # Combine BrowserForge injection with additional stealth
+        combined_script = f"""
+// BrowserForge Injection (includes WebRTC mocking)
+{browserforge_script}
+
+// Additional stealth overrides
 (function() {{
     'use strict';
     
-    console.log('[BrowserForge Stealth] Applying fingerprint overrides');
+    console.log('[Enhanced Stealth] Applying additional overrides');
     
-    // Hide webdriver
-    Object.defineProperty(navigator, 'webdriver', {{
-        get: () => undefined,
-        configurable: true
-    }});
+    // Hide webdriver (if not already done by BrowserForge)
+    if (navigator.webdriver) {{
+        Object.defineProperty(navigator, 'webdriver', {{
+            get: () => undefined,
+            configurable: true
+        }});
+    }}
     
-    // BrowserForge: Platform override
-    Object.defineProperty(navigator, 'platform', {{
-        get: () => '{platform}',
-        configurable: true
-    }});
-    
-    // BrowserForge: Hardware concurrency
-    Object.defineProperty(navigator, 'hardwareConcurrency', {{
-        get: () => {hardware_concurrency},
-        configurable: true
-    }});
-    
-    // BrowserForge: Device memory
-    Object.defineProperty(navigator, 'deviceMemory', {{
-        get: () => {device_memory},
-        configurable: true
-    }});
-    
-    // BrowserForge: Languages
-    Object.defineProperty(navigator, 'language', {{
-        get: () => '{language}',
-        configurable: true
-    }});
-    
-    Object.defineProperty(navigator, 'languages', {{
-        get: () => {languages_str},
-        configurable: true
-    }});
-    
-    // Chrome runtime
+    // Chrome runtime (for compatibility)
     if (!window.chrome) {{
         window.chrome = {{}};
     }}
-    window.chrome.runtime = {{
-        connect: () => ({{}}),
-        sendMessage: () => ({{}})
-    }};
-    
-    // BrowserForge: WebGL fingerprint
-    const getParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(parameter) {{
-        if (parameter === 37445) return '{webgl_vendor}';
-        if (parameter === 37446) return '{webgl_renderer}';
-        return getParameter.call(this, parameter);
-    }};
-    
-    if (typeof WebGL2RenderingContext !== 'undefined') {{
-        const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
-        WebGL2RenderingContext.prototype.getParameter = function(parameter) {{
-            if (parameter === 37445) return '{webgl_vendor}';
-            if (parameter === 37446) return '{webgl_renderer}';
-            return getParameter2.call(this, parameter);
+    if (!window.chrome.runtime) {{
+        window.chrome.runtime = {{
+            connect: () => ({{}}),
+            sendMessage: () => ({{}}),
+            id: undefined,
+            onMessage: {{
+                addListener: () => {{}}
+            }}
         }};
     }}
     
-    console.log('[BrowserForge Stealth] ✅ Fingerprint overrides applied');
+    // Permissions API override
+    if (navigator.permissions && navigator.permissions.query) {{
+        const originalQuery = navigator.permissions.query;
+        navigator.permissions.query = function(parameters) {{
+            if (parameters.name === 'notifications') {{
+                return Promise.resolve({{ state: 'default' }});
+            }}
+            return originalQuery.apply(this, arguments);
+        }};
+    }}
+    
+    // Battery API (mobile-like behavior)
+    if (navigator.getBattery) {{
+        navigator.getBattery = async () => ({{
+            charging: {enhanced_config.get('battery_charging', 'false').lower()},
+            chargingTime: Infinity,
+            dischargingTime: 28800,
+            level: {enhanced_config.get('battery_level', 0.75)},
+            onchargingchange: null,
+            onchargingtimechange: null,
+            ondischargingtimechange: null,
+            onlevelchange: null
+        }});
+    }}
+    
+    console.log('[Enhanced Stealth] ✅ All overrides applied');
 }})();
-
-{webrtc_script}
-        """
+"""
         
-        await context.add_init_script(script)
-        logger.info("✅ BrowserForge stealth + WebRTC protection applied")
+        # Apply the combined script to the context
+        await context.add_init_script(combined_script)
+        logger.info("✅ BrowserForge stealth + WebRTC protection applied to context")
