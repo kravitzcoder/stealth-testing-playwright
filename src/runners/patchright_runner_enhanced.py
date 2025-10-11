@@ -1,11 +1,12 @@
 """
-PATCHRIGHT RUNNER ENHANCED - With WebRTC Relay Mode + BrowserForge
+PATCHRIGHT RUNNER ENHANCED - With COMPLETE WebRTC Blocking + BrowserForge
 
-WebRTC Strategy + BrowserForge:
+WebRTC Strategy - COMPLETE BLOCKING:
 - Leverage Patchright's browser patches
-- Add WebRTC relay-only mode
-- Browser flags + JavaScript masking
-- BrowserForge intelligent fingerprints (NEW!)
+- Disable WebRTC at browser flag level
+- Block all WebRTC APIs via JavaScript
+- Prevent STUN/TURN connections
+- BrowserForge intelligent fingerprints
 """
 
 import logging
@@ -19,11 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 class PatchrightRunnerEnhanced(BaseRunner):
-    """Patchright runner with browser patches + WebRTC relay + BrowserForge"""
+    """Patchright runner with browser patches + COMPLETE WebRTC blocking + BrowserForge"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("Patchright runner initialized (patches + WebRTC + BrowserForge)")
+        logger.info("Patchright runner initialized (patches + WebRTC BLOCKED + BrowserForge)")
     
     async def run_test(
         self,
@@ -33,7 +34,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Patchright's patches + WebRTC relay + BrowserForge"""
+        """Run test with Patchright's patches + COMPLETE WebRTC blocking + BrowserForge"""
         start_time = time.time()
         logger.info(f"🎭 Testing Patchright (BrowserForge) on {url_name}: {url}")
         
@@ -56,10 +57,10 @@ class PatchrightRunnerEnhanced(BaseRunner):
             async with async_playwright() as p:
                 proxy = self._build_proxy(proxy_config)
                 
-                # Get enhanced mobile config with BrowserForge (NEW!)
+                # Get enhanced mobile config with BrowserForge
                 enhanced_config = self.get_enhanced_mobile_config(
                     mobile_config=mobile_config,
-                    device_type="iphone_x",  # or extract from mobile_config
+                    device_type="iphone_x",
                     use_browserforge=True
                 )
                 
@@ -69,7 +70,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 else:
                     logger.info(f"📱 Using standard profile: {enhanced_config.get('device_name')}")
                 
-                # Patchright launch args + WebRTC flags
+                # Patchright launch args + AGGRESSIVE WebRTC blocking
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
@@ -77,9 +78,17 @@ class PatchrightRunnerEnhanced(BaseRunner):
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
                         
-                        # WebRTC flags
-                        '--force-webrtc-ip-handling-policy=default_public_interface_only',
+                        # AGGRESSIVE WebRTC blocking flags
+                        '--disable-webrtc',
+                        '--disable-rtc-smoothness-algorithm',
+                        '--disable-webrtc-hw-decoding',
+                        '--disable-webrtc-hw-encoding',
+                        '--disable-webrtc-encryption',
+                        '--disable-webrtc-hw-vp8-encoding',
+                        '--disable-webrtc-hw-vp9-encoding',
                         '--enforce-webrtc-ip-permission-check',
+                        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+                        '--webrtc-ip-handling-policy=disable_non_proxied_udp',
                     ]
                 )
                 
@@ -96,8 +105,8 @@ class PatchrightRunnerEnhanced(BaseRunner):
                     geolocation={"latitude": 37.7749, "longitude": -122.4194}
                 )
                 
-                # Apply Patchright stealth + WebRTC relay + BrowserForge
-                await self._apply_patchright_stealth_with_browserforge(context, enhanced_config)
+                # Apply Patchright stealth + COMPLETE WebRTC blocking + BrowserForge
+                await self._apply_complete_webrtc_block_with_browserforge(context, enhanced_config)
                 
                 page = await context.new_page()
                 
@@ -135,7 +144,8 @@ class PatchrightRunnerEnhanced(BaseRunner):
                     execution_time=execution_time,
                     additional_data={
                         'browserforge_enhanced': enhanced_config.get('_browserforge_enhanced', False),
-                        'device_name': enhanced_config.get('device_name')
+                        'device_name': enhanced_config.get('device_name'),
+                        'webrtc_blocked': True
                     }
                 )
         
@@ -154,11 +164,11 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 execution_time=execution_time
             )
     
-    async def _apply_patchright_stealth_with_browserforge(self, context, enhanced_config: Dict[str, Any]):
+    async def _apply_complete_webrtc_block_with_browserforge(self, context, enhanced_config: Dict[str, Any]):
         """
-        Patchright stealth + WebRTC relay + BrowserForge
+        COMPLETE WebRTC blocking + Patchright stealth + BrowserForge
         
-        Patchright has browser-level patches, we add JS stealth + WebRTC relay + BrowserForge
+        Combines Patchright's browser-level patches with complete WebRTC blocking
         """
         platform = enhanced_config.get("platform", "iPhone")
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
@@ -176,7 +186,109 @@ class PatchrightRunnerEnhanced(BaseRunner):
 (function() {{
     'use strict';
     
-    console.log('[Patchright + BrowserForge] Enhanced stealth active');
+    console.log('[Patchright + BrowserForge] Enhanced stealth + COMPLETE WebRTC blocking active');
+    
+    // ==========================================
+    // COMPLETE WebRTC BLOCKING - IP LEAK PREVENTION
+    // ==========================================
+    
+    // Block RTCPeerConnection COMPLETELY
+    if (typeof RTCPeerConnection !== 'undefined') {{
+        const blockMessage = 'RTCPeerConnection is disabled for privacy';
+        
+        window.RTCPeerConnection = class {{
+            constructor() {{
+                throw new Error(blockMessage);
+            }}
+        }};
+        
+        Object.defineProperty(window, 'RTCPeerConnection', {{
+            value: window.RTCPeerConnection,
+            writable: false,
+            configurable: false
+        }});
+    }}
+    
+    // Block webkitRTCPeerConnection
+    if (typeof webkitRTCPeerConnection !== 'undefined') {{
+        window.webkitRTCPeerConnection = class {{
+            constructor() {{
+                throw new Error('webkitRTCPeerConnection is disabled');
+            }}
+        }};
+        
+        Object.defineProperty(window, 'webkitRTCPeerConnection', {{
+            value: window.webkitRTCPeerConnection,
+            writable: false,
+            configurable: false
+        }});
+    }}
+    
+    // Block mozRTCPeerConnection (Firefox)
+    if (typeof mozRTCPeerConnection !== 'undefined') {{
+        window.mozRTCPeerConnection = class {{
+            constructor() {{
+                throw new Error('mozRTCPeerConnection is disabled');
+            }}
+        }};
+    }}
+    
+    // Block getUserMedia (all variants)
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
+        navigator.mediaDevices.getUserMedia = function() {{
+            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    if (navigator.getUserMedia) {{
+        navigator.getUserMedia = function(constraints, success, error) {{
+            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    if (navigator.webkitGetUserMedia) {{
+        navigator.webkitGetUserMedia = function(constraints, success, error) {{
+            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    if (navigator.mozGetUserMedia) {{
+        navigator.mozGetUserMedia = function(constraints, success, error) {{
+            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    // Block enumerateDevices
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {{
+        navigator.mediaDevices.enumerateDevices = function() {{
+            return Promise.resolve([]);
+        }};
+    }}
+    
+    // Block RTCDataChannel
+    if (typeof RTCDataChannel !== 'undefined') {{
+        window.RTCDataChannel = class {{
+            constructor() {{
+                throw new Error('RTCDataChannel is disabled');
+            }}
+        }};
+    }}
+    
+    // Block RTCSessionDescription
+    if (typeof RTCSessionDescription !== 'undefined') {{
+        window.RTCSessionDescription = undefined;
+    }}
+    
+    // Block RTCIceCandidate
+    if (typeof RTCIceCandidate !== 'undefined') {{
+        window.RTCIceCandidate = undefined;
+    }}
+    
+    console.log('[WebRTC] ✅ COMPLETE blocking applied - NO IP LEAKS');
+    
+    // ==========================================
+    // PATCHRIGHT STEALTH + BROWSERFORGE ENHANCEMENTS
+    // ==========================================
     
     // Hide webdriver
     Object.defineProperty(navigator, 'webdriver', {{
@@ -245,29 +357,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
         }};
     }}
     
-    // WebRTC: Force relay-only mode (uses proxy)
-    if (typeof RTCPeerConnection !== 'undefined') {{
-        const OriginalRTCPeerConnection = RTCPeerConnection;
-        
-        window.RTCPeerConnection = function(config) {{
-            // Force relay mode
-            if (config) {{
-                config.iceServers = config.iceServers || [];
-                config.iceTransportPolicy = 'relay';
-            }} else {{
-                config = {{ iceTransportPolicy: 'relay' }};
-            }}
-            
-            console.log('[Patchright WebRTC] Relay mode enforced (proxy)');
-            return new OriginalRTCPeerConnection(config);
-        }};
-        
-        window.RTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
-    }}
-    
-    console.log('[Patchright + BrowserForge] ✅ Patches + stealth + WebRTC relay + fingerprints active');
+    console.log('[Patchright + BrowserForge] ✅ Browser patches + stealth + WebRTC blocking + fingerprints active');
 }})();
         """
         
         await context.add_init_script(script)
-        logger.info("✅ Patchright: Browser patches + BrowserForge stealth + WebRTC relay applied")
+        logger.info("✅ Patchright: Browser patches + COMPLETE WebRTC blocking + BrowserForge stealth applied")
