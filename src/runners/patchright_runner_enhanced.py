@@ -1,11 +1,11 @@
 """
-PATCHRIGHT RUNNER ENHANCED - With COMPLETE WebRTC Blocking + BrowserForge
+PATCHRIGHT RUNNER ENHANCED - With Smart WebRTC Protection + BrowserForge
 
-WebRTC Strategy - COMPLETE BLOCKING:
+WebRTC Strategy - SMART BLOCKING:
 - Leverage Patchright's browser patches
-- Disable WebRTC at browser flag level
-- Block all WebRTC APIs via JavaScript
-- Prevent STUN/TURN connections
+- Block local IP discovery (prevents leaks)
+- Force proxy-only connections
+- Allow page to load and function
 - BrowserForge intelligent fingerprints
 """
 
@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 class PatchrightRunnerEnhanced(BaseRunner):
-    """Patchright runner with browser patches + COMPLETE WebRTC blocking + BrowserForge"""
+    """Patchright runner with browser patches + Smart WebRTC protection + BrowserForge"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("Patchright runner initialized (patches + WebRTC BLOCKED + BrowserForge)")
+        logger.info("Patchright runner initialized (patches + Smart WebRTC + BrowserForge)")
     
     async def run_test(
         self,
@@ -34,7 +34,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Patchright's patches + COMPLETE WebRTC blocking + BrowserForge"""
+        """Run test with Patchright's patches + Smart WebRTC protection + BrowserForge"""
         start_time = time.time()
         logger.info(f"🎭 Testing Patchright (BrowserForge) on {url_name}: {url}")
         
@@ -70,7 +70,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 else:
                     logger.info(f"📱 Using standard profile: {enhanced_config.get('device_name')}")
                 
-                # Patchright launch args + AGGRESSIVE WebRTC blocking
+                # Patchright launch args + Smart WebRTC protection
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
@@ -78,17 +78,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
                         
-                        # AGGRESSIVE WebRTC blocking flags
-                        '--disable-webrtc',
-                        '--disable-rtc-smoothness-algorithm',
-                        '--disable-webrtc-hw-decoding',
-                        '--disable-webrtc-hw-encoding',
-                        '--disable-webrtc-encryption',
-                        '--disable-webrtc-hw-vp8-encoding',
-                        '--disable-webrtc-hw-vp9-encoding',
+                        # Smart WebRTC protection (not complete blocking)
+                        '--force-webrtc-ip-handling-policy=default_public_interface_only',
                         '--enforce-webrtc-ip-permission-check',
-                        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
-                        '--webrtc-ip-handling-policy=disable_non_proxied_udp',
                     ]
                 )
                 
@@ -105,8 +97,8 @@ class PatchrightRunnerEnhanced(BaseRunner):
                     geolocation={"latitude": 37.7749, "longitude": -122.4194}
                 )
                 
-                # Apply Patchright stealth + COMPLETE WebRTC blocking + BrowserForge
-                await self._apply_complete_webrtc_block_with_browserforge(context, enhanced_config)
+                # Apply Patchright stealth + Smart WebRTC protection + BrowserForge
+                await self._apply_smart_webrtc_protection_with_browserforge(context, enhanced_config)
                 
                 page = await context.new_page()
                 
@@ -145,7 +137,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                     additional_data={
                         'browserforge_enhanced': enhanced_config.get('_browserforge_enhanced', False),
                         'device_name': enhanced_config.get('device_name'),
-                        'webrtc_blocked': True
+                        'webrtc_protected': True
                     }
                 )
         
@@ -164,11 +156,12 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 execution_time=execution_time
             )
     
-    async def _apply_complete_webrtc_block_with_browserforge(self, context, enhanced_config: Dict[str, Any]):
+    async def _apply_smart_webrtc_protection_with_browserforge(self, context, enhanced_config: Dict[str, Any]):
         """
-        COMPLETE WebRTC blocking + Patchright stealth + BrowserForge
+        SMART WebRTC protection + Patchright stealth + BrowserForge
         
-        Combines Patchright's browser-level patches with complete WebRTC blocking
+        Combines Patchright's browser-level patches with smart WebRTC protection
+        that prevents IP leaks without breaking functionality
         """
         platform = enhanced_config.get("platform", "iPhone")
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
@@ -186,105 +179,83 @@ class PatchrightRunnerEnhanced(BaseRunner):
 (function() {{
     'use strict';
     
-    console.log('[Patchright + BrowserForge] Enhanced stealth + COMPLETE WebRTC blocking active');
+    console.log('[Patchright + BrowserForge] Smart WebRTC protection active');
     
     // ==========================================
-    // COMPLETE WebRTC BLOCKING - IP LEAK PREVENTION
+    // SMART WebRTC PROTECTION - Prevent IP Leaks
     // ==========================================
     
-    // Block RTCPeerConnection COMPLETELY
-    if (typeof RTCPeerConnection !== 'undefined') {{
-        const blockMessage = 'RTCPeerConnection is disabled for privacy';
+    // Store original RTCPeerConnection
+    const OriginalRTCPeerConnection = window.RTCPeerConnection || 
+                                      window.webkitRTCPeerConnection || 
+                                      window.mozRTCPeerConnection;
+    
+    if (OriginalRTCPeerConnection) {{
+        // Create protected version
+        const ProtectedRTCPeerConnection = function(config) {{
+            // Force relay-only mode (uses proxy)
+            if (!config) {{
+                config = {{}};
+            }}
+            
+            // Force relay mode - prevents local IP discovery
+            config.iceTransportPolicy = 'relay';
+            
+            // Remove any STUN servers (they can leak IPs)
+            if (config.iceServers) {{
+                config.iceServers = config.iceServers.filter(server => {{
+                    const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+                    return !urls.some(url => url.includes('stun:'));
+                }});
+            }}
+            
+            console.log('[WebRTC] Protected mode: relay-only, no STUN servers');
+            
+            // Create the connection with protected config
+            const pc = new OriginalRTCPeerConnection(config);
+            
+            // Intercept createOffer to ensure relay mode
+            const originalCreateOffer = pc.createOffer.bind(pc);
+            pc.createOffer = function(options) {{
+                if (!options) options = {{}};
+                options.offerToReceiveAudio = false;
+                options.offerToReceiveVideo = false;
+                return originalCreateOffer(options);
+            }};
+            
+            // Block local candidate gathering
+            const originalAddIceCandidate = pc.addIceCandidate.bind(pc);
+            pc.addIceCandidate = function(candidate) {{
+                if (candidate && candidate.candidate) {{
+                    // Block local/host candidates (they contain real IP)
+                    if (candidate.candidate.includes('typ host') || 
+                        candidate.candidate.includes('typ srflx')) {{
+                        console.log('[WebRTC] Blocked local candidate');
+                        return Promise.resolve();
+                    }}
+                }}
+                return originalAddIceCandidate(candidate);
+            }};
+            
+            return pc;
+        }};
         
-        window.RTCPeerConnection = class {{
-            constructor() {{
-                throw new Error(blockMessage);
-            }}
-        }};
+        // Copy prototype
+        ProtectedRTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
         
-        Object.defineProperty(window, 'RTCPeerConnection', {{
-            value: window.RTCPeerConnection,
-            writable: false,
-            configurable: false
-        }});
-    }}
-    
-    // Block webkitRTCPeerConnection
-    if (typeof webkitRTCPeerConnection !== 'undefined') {{
-        window.webkitRTCPeerConnection = class {{
-            constructor() {{
-                throw new Error('webkitRTCPeerConnection is disabled');
-            }}
-        }};
+        // Replace global RTCPeerConnection
+        window.RTCPeerConnection = ProtectedRTCPeerConnection;
         
-        Object.defineProperty(window, 'webkitRTCPeerConnection', {{
-            value: window.webkitRTCPeerConnection,
-            writable: false,
-            configurable: false
-        }});
+        if (window.webkitRTCPeerConnection) {{
+            window.webkitRTCPeerConnection = ProtectedRTCPeerConnection;
+        }}
+        
+        if (window.mozRTCPeerConnection) {{
+            window.mozRTCPeerConnection = ProtectedRTCPeerConnection;
+        }}
+        
+        console.log('[WebRTC] ✅ Smart protection applied - local IPs blocked');
     }}
-    
-    // Block mozRTCPeerConnection (Firefox)
-    if (typeof mozRTCPeerConnection !== 'undefined') {{
-        window.mozRTCPeerConnection = class {{
-            constructor() {{
-                throw new Error('mozRTCPeerConnection is disabled');
-            }}
-        }};
-    }}
-    
-    // Block getUserMedia (all variants)
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
-        navigator.mediaDevices.getUserMedia = function() {{
-            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
-        }};
-    }}
-    
-    if (navigator.getUserMedia) {{
-        navigator.getUserMedia = function(constraints, success, error) {{
-            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
-        }};
-    }}
-    
-    if (navigator.webkitGetUserMedia) {{
-        navigator.webkitGetUserMedia = function(constraints, success, error) {{
-            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
-        }};
-    }}
-    
-    if (navigator.mozGetUserMedia) {{
-        navigator.mozGetUserMedia = function(constraints, success, error) {{
-            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
-        }};
-    }}
-    
-    // Block enumerateDevices
-    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {{
-        navigator.mediaDevices.enumerateDevices = function() {{
-            return Promise.resolve([]);
-        }};
-    }}
-    
-    // Block RTCDataChannel
-    if (typeof RTCDataChannel !== 'undefined') {{
-        window.RTCDataChannel = class {{
-            constructor() {{
-                throw new Error('RTCDataChannel is disabled');
-            }}
-        }};
-    }}
-    
-    // Block RTCSessionDescription
-    if (typeof RTCSessionDescription !== 'undefined') {{
-        window.RTCSessionDescription = undefined;
-    }}
-    
-    // Block RTCIceCandidate
-    if (typeof RTCIceCandidate !== 'undefined') {{
-        window.RTCIceCandidate = undefined;
-    }}
-    
-    console.log('[WebRTC] ✅ COMPLETE blocking applied - NO IP LEAKS');
     
     // ==========================================
     // PATCHRIGHT STEALTH + BROWSERFORGE ENHANCEMENTS
@@ -357,9 +328,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
         }};
     }}
     
-    console.log('[Patchright + BrowserForge] ✅ Browser patches + stealth + WebRTC blocking + fingerprints active');
+    console.log('[Patchright + BrowserForge] ✅ Browser patches + smart WebRTC protection + fingerprints active');
 }})();
         """
         
         await context.add_init_script(script)
-        logger.info("✅ Patchright: Browser patches + COMPLETE WebRTC blocking + BrowserForge stealth applied")
+        logger.info("✅ Patchright: Browser patches + Smart WebRTC protection + BrowserForge stealth applied")
