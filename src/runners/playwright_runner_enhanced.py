@@ -1,11 +1,11 @@
 """
-PLAYWRIGHT RUNNER - Enhanced with BrowserForge
+PLAYWRIGHT RUNNER - Enhanced with BrowserForge + COMPLETE WebRTC Blocking
 
-WebRTC Strategy + BrowserForge Enhancement:
-- Force WebRTC to use relay-only mode (uses proxy interface)
-- Browser flags to enforce proxy usage
-- JavaScript to force iceTransportPolicy='relay'
-- BrowserForge intelligent fingerprints (NEW!)
+WebRTC Strategy - COMPLETE BLOCKING:
+- Disable WebRTC at browser flag level
+- Block all WebRTC APIs via JavaScript
+- Prevent STUN/TURN connections
+- BrowserForge intelligent fingerprints
 """
 
 import logging
@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 class PlaywrightRunnerEnhanced(BaseRunner):
-    """Vanilla Playwright runner with WebRTC relay mode + BrowserForge"""
+    """Vanilla Playwright runner with COMPLETE WebRTC blocking + BrowserForge"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("Playwright runner initialized (WebRTC relay + BrowserForge)")
+        logger.info("Playwright runner initialized (WebRTC BLOCKED + BrowserForge)")
     
     async def run_test(
         self,
@@ -33,7 +33,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Playwright + WebRTC relay mode + BrowserForge"""
+        """Run test with Playwright + COMPLETE WebRTC blocking + BrowserForge"""
         start_time = time.time()
         logger.info(f"🎭 Testing Playwright (BrowserForge) on {url_name}: {url}")
         
@@ -56,7 +56,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
             async with async_playwright() as p:
                 proxy = self._build_proxy(proxy_config)
                 
-                # Launch args with WebRTC flags
+                # Launch args with AGGRESSIVE WebRTC blocking
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
@@ -65,16 +65,24 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
                         
-                        # WebRTC flags
-                        '--force-webrtc-ip-handling-policy=default_public_interface_only',
+                        # AGGRESSIVE WebRTC blocking flags
+                        '--disable-webrtc',
+                        '--disable-rtc-smoothness-algorithm',
+                        '--disable-webrtc-hw-decoding',
+                        '--disable-webrtc-hw-encoding',
+                        '--disable-webrtc-encryption',
+                        '--disable-webrtc-hw-vp8-encoding',
+                        '--disable-webrtc-hw-vp9-encoding',
                         '--enforce-webrtc-ip-permission-check',
+                        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+                        '--webrtc-ip-handling-policy=disable_non_proxied_udp',
                     ]
                 )
                 
-                # Get enhanced mobile config with BrowserForge (NEW!)
+                # Get enhanced mobile config with BrowserForge
                 enhanced_config = self.get_enhanced_mobile_config(
                     mobile_config=mobile_config,
-                    device_type="iphone_x",  # or extract from mobile_config
+                    device_type="iphone_x",
                     use_browserforge=True
                 )
                 
@@ -98,8 +106,8 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                     geolocation={"latitude": 37.7749, "longitude": -122.4194}
                 )
                 
-                # Apply stealth + WebRTC relay mode with BrowserForge data
-                await self._apply_stealth_with_browserforge(context, enhanced_config)
+                # Apply COMPLETE WebRTC blocking + stealth + BrowserForge
+                await self._apply_complete_webrtc_block_with_browserforge(context, enhanced_config)
                 
                 page = await context.new_page()
                 
@@ -137,7 +145,8 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                     execution_time=execution_time,
                     additional_data={
                         'browserforge_enhanced': enhanced_config.get('_browserforge_enhanced', False),
-                        'device_name': enhanced_config.get('device_name')
+                        'device_name': enhanced_config.get('device_name'),
+                        'webrtc_blocked': True
                     }
                 )
         
@@ -156,11 +165,11 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 execution_time=execution_time
             )
     
-    async def _apply_stealth_with_browserforge(self, context, enhanced_config: Dict[str, Any]):
+    async def _apply_complete_webrtc_block_with_browserforge(self, context, enhanced_config: Dict[str, Any]):
         """
-        Enhanced stealth + WebRTC relay mode with BrowserForge data
+        COMPLETE WebRTC blocking + Enhanced stealth with BrowserForge
         
-        Injects BrowserForge fingerprint values into the page
+        This COMPLETELY disables WebRTC to prevent IP leaks
         """
         platform = enhanced_config.get('platform', 'iPhone')
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
@@ -177,7 +186,109 @@ class PlaywrightRunnerEnhanced(BaseRunner):
 (function() {{
     'use strict';
     
-    console.log('[Playwright + BrowserForge] Enhanced stealth active');
+    console.log('[Playwright + BrowserForge] Enhanced stealth + COMPLETE WebRTC blocking active');
+    
+    // ==========================================
+    // COMPLETE WebRTC BLOCKING - IP LEAK PREVENTION
+    // ==========================================
+    
+    // Block RTCPeerConnection COMPLETELY
+    if (typeof RTCPeerConnection !== 'undefined') {{
+        const blockMessage = 'RTCPeerConnection is disabled for privacy';
+        
+        window.RTCPeerConnection = class {{
+            constructor() {{
+                throw new Error(blockMessage);
+            }}
+        }};
+        
+        Object.defineProperty(window, 'RTCPeerConnection', {{
+            value: window.RTCPeerConnection,
+            writable: false,
+            configurable: false
+        }});
+    }}
+    
+    // Block webkitRTCPeerConnection
+    if (typeof webkitRTCPeerConnection !== 'undefined') {{
+        window.webkitRTCPeerConnection = class {{
+            constructor() {{
+                throw new Error('webkitRTCPeerConnection is disabled');
+            }}
+        }};
+        
+        Object.defineProperty(window, 'webkitRTCPeerConnection', {{
+            value: window.webkitRTCPeerConnection,
+            writable: false,
+            configurable: false
+        }});
+    }}
+    
+    // Block mozRTCPeerConnection (Firefox)
+    if (typeof mozRTCPeerConnection !== 'undefined') {{
+        window.mozRTCPeerConnection = class {{
+            constructor() {{
+                throw new Error('mozRTCPeerConnection is disabled');
+            }}
+        }};
+    }}
+    
+    // Block getUserMedia (all variants)
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
+        navigator.mediaDevices.getUserMedia = function() {{
+            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    if (navigator.getUserMedia) {{
+        navigator.getUserMedia = function(constraints, success, error) {{
+            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    if (navigator.webkitGetUserMedia) {{
+        navigator.webkitGetUserMedia = function(constraints, success, error) {{
+            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    if (navigator.mozGetUserMedia) {{
+        navigator.mozGetUserMedia = function(constraints, success, error) {{
+            if (error) error(new DOMException('Permission denied', 'NotAllowedError'));
+        }};
+    }}
+    
+    // Block enumerateDevices
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {{
+        navigator.mediaDevices.enumerateDevices = function() {{
+            return Promise.resolve([]);
+        }};
+    }}
+    
+    // Block RTCDataChannel
+    if (typeof RTCDataChannel !== 'undefined') {{
+        window.RTCDataChannel = class {{
+            constructor() {{
+                throw new Error('RTCDataChannel is disabled');
+            }}
+        }};
+    }}
+    
+    // Block RTCSessionDescription
+    if (typeof RTCSessionDescription !== 'undefined') {{
+        window.RTCSessionDescription = undefined;
+    }}
+    
+    // Block RTCIceCandidate
+    if (typeof RTCIceCandidate !== 'undefined') {{
+        window.RTCIceCandidate = undefined;
+    }}
+    
+    console.log('[WebRTC] ✅ COMPLETE blocking applied - NO IP LEAKS');
+    
+    // ==========================================
+    // STEALTH + BROWSERFORGE ENHANCEMENTS
+    // ==========================================
     
     // Hide webdriver
     Object.defineProperty(navigator, 'webdriver', {{
@@ -240,29 +351,9 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         }};
     }}
     
-    // WebRTC: Force relay-only mode (uses proxy)
-    if (typeof RTCPeerConnection !== 'undefined') {{
-        const OriginalRTCPeerConnection = RTCPeerConnection;
-        
-        window.RTCPeerConnection = function(config) {{
-            // Force relay mode - uses proxy interface
-            if (config) {{
-                config.iceServers = config.iceServers || [];
-                config.iceTransportPolicy = 'relay';
-            }} else {{
-                config = {{ iceTransportPolicy: 'relay' }};
-            }}
-            
-            console.log('[Playwright WebRTC] Relay mode enforced (proxy)');
-            return new OriginalRTCPeerConnection(config);
-        }};
-        
-        window.RTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
-    }}
-    
-    console.log('[Playwright + BrowserForge] ✅ Enhanced stealth + WebRTC relay active');
+    console.log('[Playwright + BrowserForge] ✅ Complete stealth + WebRTC blocking active');
 }})();
         """
         
         await context.add_init_script(script)
-        logger.info("✅ Playwright: BrowserForge stealth + WebRTC relay mode applied")
+        logger.info("✅ Playwright: COMPLETE WebRTC blocking + BrowserForge stealth applied")
