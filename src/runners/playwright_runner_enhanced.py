@@ -55,7 +55,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 # Extract proxy IP for WebRTC masking
                 proxy_ip = proxy_config.get("host") if proxy_config.get("host") else None
                 
-                # Launch with minimal args (no custom WebRTC flags)
+                # Launch with WebRTC blocking flags
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
@@ -63,6 +63,16 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                         '--disable-blink-features=AutomationControlled',
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
+                        
+                        # AGGRESSIVE WebRTC blocking at browser level
+                        '--disable-webrtc',
+                        '--disable-rtc-smoothness-algorithm',
+                        '--disable-webrtc-hw-decoding',
+                        '--disable-webrtc-hw-encoding',
+                        '--disable-webrtc-encryption',
+                        '--disable-webrtc-multiple-routes',
+                        '--enforce-webrtc-ip-permission-check',
+                        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
                     ]
                 )
                 
