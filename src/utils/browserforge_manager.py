@@ -225,6 +225,7 @@ class BrowserForgeManager:
             '_browserforge_enhanced': True,
             '_browserforge_webrtc_mock': mock_webrtc,
             '_browserforge_fingerprint': fingerprint,  # Store for injection
+            '_browserforge_webrtc_enabled': mock_webrtc,  # Flag for WebRTC protection
             '_session_consistent': True,
             
             # Store proxy IP for WebRTC
@@ -233,7 +234,7 @@ class BrowserForgeManager:
         
         return enhanced_config
     
-    def inject_fingerprint_to_page(
+    async def inject_fingerprint_to_page(
         self,
         page,
         enhanced_config: Dict[str, Any]
@@ -244,7 +245,7 @@ class BrowserForgeManager:
         This uses BrowserForge's built-in injection which includes WebRTC mocking
         
         Args:
-            page: Playwright page object
+            page: Playwright page object  
             enhanced_config: Enhanced config with fingerprint
         """
         fingerprint = enhanced_config.get('_browserforge_fingerprint')
@@ -253,41 +254,40 @@ class BrowserForgeManager:
             return
         
         try:
-            # Use BrowserForge's native inject_fingerprint method
-            # This handles WebRTC mocking automatically if mock_webrtc=True
-            import asyncio
+            # Get the injection script from BrowserForge
+            injection_script = fingerprint.toScript()
             
-            # BrowserForge's inject method (async)
-            async def inject():
-                await page.evaluate(fingerprint.inject())
-            
-            # Run injection
-            asyncio.create_task(inject())
+            # Inject it into the page
+            await page.add_init_script(injection_script)
             
             logger.info("✅ BrowserForge fingerprint injected (with WebRTC mocking)")
             
         except Exception as e:
             logger.error(f"Failed to inject fingerprint: {e}")
     
-    def get_browserforge_webrtc_script(
+    def get_browserforge_injection_script(
         self, 
         enhanced_config: Dict[str, Any]
     ) -> str:
         """
-        Get BrowserForge's native WebRTC injection script
-        
-        NOTE: This is now handled by fingerprint.inject() instead
-        This method is kept for compatibility but returns empty string
+        Get BrowserForge's injection script for manual injection
         
         Args:
-            enhanced_config: Enhanced config with proxy IP
+            enhanced_config: Enhanced config with fingerprint
         
         Returns:
-            Empty string (WebRTC handled by BrowserForge injection)
+            JavaScript injection script
         """
-        # BrowserForge handles WebRTC mocking via fingerprint.inject()
-        # No need for custom script
-        return ""
+        fingerprint = enhanced_config.get('_browserforge_fingerprint')
+        if not fingerprint:
+            return ""
+        
+        try:
+            # Get the injection script from BrowserForge
+            return fingerprint.toScript()
+        except Exception as e:
+            logger.error(f"Failed to get injection script: {e}")
+            return ""
     
     def is_browserforge_available(self) -> bool:
         """Check if BrowserForge is available"""
