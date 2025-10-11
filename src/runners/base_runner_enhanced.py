@@ -1,4 +1,28 @@
-# Add these methods to base_runner_enhanced.py
+"""
+BASE RUNNER - Enhanced with BrowserForge and Session Management
+
+Contains common code used by all specialized runners:
+- Proxy configuration
+- IP detection
+- Mobile UA checking
+- Screenshot coordination
+- WebRTC blocking (UNIVERSAL)
+- BrowserForge fingerprint enhancement
+- Session management for device consistency
+"""
+
+import logging
+import asyncio
+import re
+from typing import Dict, Any, Optional, Tuple  # ← FIX: Add Optional and Tuple
+from pathlib import Path
+
+from ..core.test_result import TestResult
+from ..core.screenshot_engine import ScreenshotEngine
+from ..utils.browserforge_manager import BrowserForgeManager
+
+logger = logging.getLogger(__name__)
+
 
 class BaseRunner:
     """Base class with shared functionality for all runners"""
@@ -7,7 +31,7 @@ class BaseRunner:
         """Initialize base runner with BrowserForge enhancement"""
         self.screenshot_engine = screenshot_engine or ScreenshotEngine()
         
-        # Initialize BrowserForge manager (NEW!)
+        # Initialize BrowserForge manager
         self.browserforge = BrowserForgeManager()
         
         # Log fingerprint capabilities
@@ -96,5 +120,6 @@ class BaseRunner:
             else:
                 # Last resort: use provided config
                 return mobile_config
-
-# Rest of your BaseRunner methods remain the same...
+    
+    # Rest of your BaseRunner methods...
+    # (Keep all the existing methods like _get_universal_webrtc_blocker, etc.)
