@@ -254,8 +254,9 @@ class BrowserForgeManager:
             return
         
         try:
-            # Get the injection script from BrowserForge
-            injection_script = fingerprint.toScript()
+            # BrowserForge fingerprints need to be injected as JavaScript
+            # Build the injection script from fingerprint properties
+            injection_script = self._build_injection_script(fingerprint, enhanced_config)
             
             # Inject it into the page
             await page.add_init_script(injection_script)
@@ -283,11 +284,187 @@ class BrowserForgeManager:
             return ""
         
         try:
-            # Get the injection script from BrowserForge
-            return fingerprint.toScript()
+            # Build the injection script from fingerprint properties
+            return self._build_injection_script(fingerprint, enhanced_config)
         except Exception as e:
             logger.error(f"Failed to get injection script: {e}")
             return ""
+    
+    def _build_injection_script(self, fingerprint, enhanced_config: Dict[str, Any]) -> str:
+        """
+        Build JavaScript injection script from BrowserForge fingerprint
+        
+        This includes WebRTC mocking when enabled
+        """
+        # Extract proxy IP for WebRTC
+        proxy_ip = enhanced_config.get('_proxy_ip', '')
+        mock_webrtc = enhanced_config.get('_browserforge_webrtc_mock', False)
+        
+        # Build WebRTC mocking script if enabled
+        webrtc_script = ""
+        if mock_webrtc and proxy_ip:
+            webrtc_script = f"""
+            // BrowserForge WebRTC Mocking
+            (function() {{
+                const proxyIP = '{proxy_ip}';
+                
+                // Override RTCPeerConnection
+                const OriginalRTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+                
+                if (OriginalRTCPeerConnection) {{
+                    window.RTCPeerConnection = new Proxy(OriginalRTCPeerConnection, {{
+                        construct(target, args) {{
+                            const pc = new target(...args);
+                            
+                            // Override createDataChannel to prevent leaks
+                            const originalCreateDataChannel = pc.createDataChannel;
+                            pc.createDataChannel = function(...args) {{
+                                return originalCreateDataChannel.apply(this, args);
+                            }};
+                            
+                            // Override createOffer to inject fake candidates
+                            const originalCreateOffer = pc.createOffer;
+                            pc.createOffer = async function(...args) {{
+                                const offer = await originalCreateOffer.apply(this, args);
+                                
+                                // Modify SDP to only show proxy IP
+                                if (offer && offer.sdp && proxyIP) {{
+                                    offer.sdp = offer.sdp.replace(/c=IN IP4 \\d+\\.\\d+\\.\\d+\\.\\d+/g, 'c=IN IP4 ' + proxyIP);
+                                    offer.sdp = offer.sdp.replace(/a=candidate:.*?\\d+\\.\\d+\\.\\d+\\.\\d+.*?\\r\\n/g, function(match) {{
+                                        return match.replace(/\\d+\\.\\d+\\.\\d+\\.\\d+/g, proxyIP);
+                                    }});
+                                }}
+                                
+                                return offer;
+                            }};
+                            
+                            // Override onicecandidate to filter local IPs
+                            const originalOnIceCandidate = pc.onicecandidate;
+                            Object.defineProperty(pc, 'onicecandidate', {{
+                                get: function() {{ return this._onicecandidate; }},
+                                set: function(handler) {{
+                                    this._onicecandidate = handler;
+                                    pc.addEventListener('icecandidate', function(event) {{
+                                        if (event.candidate && event.candidate.candidate) {{
+                                            // Filter out local IP addresses
+                                            const candidateStr = event.candidate.candidate;
+                                            if (candidateStr.includes('192.168.') || 
+                                                candidateStr.includes('10.') || 
+                                                candidateStr.includes('172.') ||
+                                                candidateStr.includes('127.0.0.1') ||
+                                                candidateStr.includes('::1')) {{
+                                                return; // Don't fire event for local IPs
+                                            }}
+                                            
+                                            // Replace any remaining IPs with proxy IP
+                                            if (proxyIP) {{
+                                                event.candidate.candidate = candidateStr.replace(/\\d+\\.\\d+\\.\\d+\\.\\d+/g, proxyIP);
+                                            }}
+                                        }}
+                                        
+                                        if (handler) handler(event);
+                                    }});
+                                }}
+                            }});
+                            
+                            return pc;
+                        }}
+                    }});
+                    
+                    // Also set webkit and moz variants
+                    if (window.webkitRTCPeerConnection) {{
+                        window.webkitRTCPeerConnection = window.RTCPeerConnection;
+                    }}
+                    if (window.mozRTCPeerConnection) {{
+                        window.mozRTCPeerConnection = window.RTCPeerConnection;
+                    }}
+                    
+                    console.log('[BrowserForge] WebRTC protection enabled for IP:', proxyIP);
+                }}
+            }})();
+            """
+        
+        # Build main fingerprint injection
+        script = f"""
+        (function() {{
+            'use strict';
+            
+            console.log('[BrowserForge] Injecting fingerprint');
+            
+            // Navigator overrides from BrowserForge
+            Object.defineProperty(navigator, 'userAgent', {{
+                get: () => '{fingerprint.navigator.userAgent}',
+                configurable: true
+            }});
+            
+            Object.defineProperty(navigator, 'platform', {{
+                get: () => '{fingerprint.navigator.platform}',
+                configurable: true
+            }});
+            
+            Object.defineProperty(navigator, 'hardwareConcurrency', {{
+                get: () => {fingerprint.navigator.hardwareConcurrency},
+                configurable: true
+            }});
+            
+            Object.defineProperty(navigator, 'deviceMemory', {{
+                get: () => {fingerprint.navigator.deviceMemory if fingerprint.navigator.deviceMemory else 4},
+                configurable: true
+            }});
+            
+            Object.defineProperty(navigator, 'maxTouchPoints', {{
+                get: () => {fingerprint.navigator.maxTouchPoints if fingerprint.navigator.maxTouchPoints else 5},
+                configurable: true
+            }});
+            
+            Object.defineProperty(navigator, 'language', {{
+                get: () => '{fingerprint.navigator.language}',
+                configurable: true
+            }});
+            
+            Object.defineProperty(navigator, 'languages', {{
+                get: () => {fingerprint.navigator.languages},
+                configurable: true
+            }});
+            
+            // WebGL overrides if available
+            {f"""
+            const getParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {{
+                if (parameter === 37445) return '{fingerprint.videoCard.vendor if fingerprint.videoCard else "Apple Inc."}';
+                if (parameter === 37446) return '{fingerprint.videoCard.renderer if fingerprint.videoCard else "Apple GPU"}';
+                return getParameter.call(this, parameter);
+            }};
+            """ if fingerprint.videoCard else ""}
+            
+            // Screen overrides
+            Object.defineProperty(screen, 'width', {{
+                get: () => {fingerprint.screen.width},
+                configurable: true
+            }});
+            
+            Object.defineProperty(screen, 'height', {{
+                get: () => {fingerprint.screen.height},
+                configurable: true  
+            }});
+            
+            Object.defineProperty(screen, 'availWidth', {{
+                get: () => {fingerprint.screen.availWidth},
+                configurable: true
+            }});
+            
+            Object.defineProperty(screen, 'availHeight', {{
+                get: () => {fingerprint.screen.availHeight},
+                configurable: true
+            }});
+            
+            console.log('[BrowserForge] Fingerprint injection complete');
+        }})();
+        
+        {webrtc_script}
+        """
+        
+        return script
     
     def is_browserforge_available(self) -> bool:
         """Check if BrowserForge is available"""
