@@ -92,7 +92,8 @@ class BrowserForgeManager:
         self,
         device_type: str = "iphone_x",
         use_browserforge: bool = True,
-        proxy_ip: Optional[str] = None
+        proxy_ip: Optional[str] = None,
+        mock_webrtc: bool = True
     ) -> Dict[str, Any]:
         """
         Generate enhanced fingerprint with BrowserForge WebRTC support
@@ -101,6 +102,7 @@ class BrowserForgeManager:
             device_type: Device type
             use_browserforge: Whether to use BrowserForge enhancement
             proxy_ip: Proxy IP address for WebRTC configuration
+            mock_webrtc: Whether to mock WebRTC (prevents leaks)
         
         Returns:
             Enhanced mobile config dictionary with WebRTC settings
@@ -119,9 +121,10 @@ class BrowserForgeManager:
                 enhanced_config = self._apply_browserforge_enhancement(
                     base_config, 
                     self._session_device_type or device_type,
-                    proxy_ip=proxy_ip
+                    proxy_ip=proxy_ip,
+                    mock_webrtc=mock_webrtc
                 )
-                logger.debug(f"🎭 BrowserForge applied with WebRTC: {base_config.get('device_name')}")
+                logger.debug(f"🎭 BrowserForge applied with WebRTC mock: {base_config.get('device_name')}")
                 return enhanced_config
             except Exception as e:
                 logger.warning(f"⚠️ BrowserForge enhancement failed: {str(e)[:100]}")
@@ -135,15 +138,17 @@ class BrowserForgeManager:
         self,
         base_config: Dict[str, Any],
         device_type: str,
-        proxy_ip: Optional[str] = None
+        proxy_ip: Optional[str] = None,
+        mock_webrtc: bool = True
     ) -> Dict[str, Any]:
         """
-        Apply BrowserForge fingerprint with native WebRTC support
+        Apply BrowserForge fingerprint with native WebRTC mocking
         
         Args:
             base_config: Base configuration from CSV profiles
             device_type: Device type
             proxy_ip: Proxy IP for WebRTC masking
+            mock_webrtc: Whether to use BrowserForge's mock_webrtc feature
         """
         
         # Determine browser and OS constraints
@@ -165,13 +170,14 @@ class BrowserForgeManager:
             max_height=viewport_height + 10
         )
         
-        # Generate BrowserForge fingerprint
+        # Generate BrowserForge fingerprint WITH mock_webrtc
         fingerprint = self.fp_generator.generate(
             screen=screen,
             strict=False,
             browser=browsers,
             os=operating_systems,
-            device='mobile'
+            device='mobile',
+            mock_webrtc=mock_webrtc  # BrowserForge's native WebRTC mocking!
         )
         
         # Store fingerprint for session
@@ -217,7 +223,8 @@ class BrowserForgeManager:
             
             # BrowserForge metadata
             '_browserforge_enhanced': True,
-            '_browserforge_webrtc_enabled': True,
+            '_browserforge_webrtc_mock': mock_webrtc,
+            '_browserforge_fingerprint': fingerprint,  # Store for injection
             '_session_consistent': True,
             
             # Store proxy IP for WebRTC
@@ -226,145 +233,61 @@ class BrowserForgeManager:
         
         return enhanced_config
     
+    def inject_fingerprint_to_page(
+        self,
+        page,
+        enhanced_config: Dict[str, Any]
+    ):
+        """
+        Inject BrowserForge fingerprint into page using native injection
+        
+        This uses BrowserForge's built-in injection which includes WebRTC mocking
+        
+        Args:
+            page: Playwright page object
+            enhanced_config: Enhanced config with fingerprint
+        """
+        fingerprint = enhanced_config.get('_browserforge_fingerprint')
+        if not fingerprint:
+            logger.warning("No BrowserForge fingerprint to inject")
+            return
+        
+        try:
+            # Use BrowserForge's native inject_fingerprint method
+            # This handles WebRTC mocking automatically if mock_webrtc=True
+            import asyncio
+            
+            # BrowserForge's inject method (async)
+            async def inject():
+                await page.evaluate(fingerprint.inject())
+            
+            # Run injection
+            asyncio.create_task(inject())
+            
+            logger.info("✅ BrowserForge fingerprint injected (with WebRTC mocking)")
+            
+        except Exception as e:
+            logger.error(f"Failed to inject fingerprint: {e}")
+    
     def get_browserforge_webrtc_script(
         self, 
         enhanced_config: Dict[str, Any]
     ) -> str:
         """
-        Generate AGGRESSIVE WebRTC protection script
+        Get BrowserForge's native WebRTC injection script
         
-        This completely disables WebRTC to prevent ANY IP leaks
-        Trade-off: Some WebRTC-dependent features won't work, but IP is protected
+        NOTE: This is now handled by fingerprint.inject() instead
+        This method is kept for compatibility but returns empty string
         
         Args:
             enhanced_config: Enhanced config with proxy IP
         
         Returns:
-            JavaScript code for WebRTC protection
+            Empty string (WebRTC handled by BrowserForge injection)
         """
-        proxy_ip = enhanced_config.get('_proxy_ip', '0.0.0.0')
-        
-        script = f"""
-(function() {{
-    'use strict';
-    
-    console.log('[BrowserForge WebRTC] AGGRESSIVE protection mode enabled');
-    console.log('[BrowserForge WebRTC] Target proxy IP: {proxy_ip}');
-    
-    // COMPLETE WebRTC DISABLE - Most reliable way to prevent leaks
-    
-    // Remove RTCPeerConnection completely
-    if (typeof RTCPeerConnection !== 'undefined') {{
-        delete window.RTCPeerConnection;
-        
-        // Make it return undefined
-        Object.defineProperty(window, 'RTCPeerConnection', {{
-            get: function() {{
-                console.log('[BrowserForge WebRTC] RTCPeerConnection access blocked');
-                return undefined;
-            }},
-            set: function() {{}},
-            configurable: false,
-            enumerable: false
-        }});
-    }}
-    
-    // Block webkitRTCPeerConnection
-    if (typeof webkitRTCPeerConnection !== 'undefined') {{
-        delete window.webkitRTCPeerConnection;
-        
-        Object.defineProperty(window, 'webkitRTCPeerConnection', {{
-            get: function() {{
-                console.log('[BrowserForge WebRTC] webkitRTCPeerConnection access blocked');
-                return undefined;
-            }},
-            set: function() {{}},
-            configurable: false,
-            enumerable: false
-        }});
-    }}
-    
-    // Block mozRTCPeerConnection (Firefox)
-    if (typeof mozRTCPeerConnection !== 'undefined') {{
-        delete window.mozRTCPeerConnection;
-        
-        Object.defineProperty(window, 'mozRTCPeerConnection', {{
-            get: function() {{
-                console.log('[BrowserForge WebRTC] mozRTCPeerConnection access blocked');
-                return undefined;
-            }},
-            set: function() {{}},
-            configurable: false,
-            enumerable: false
-        }});
-    }}
-    
-    // Block getUserMedia (prevents camera/microphone access that can leak)
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
-        const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
-        navigator.mediaDevices.getUserMedia = function() {{
-            console.log('[BrowserForge WebRTC] getUserMedia blocked');
-            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
-        }};
-    }}
-    
-    // Block legacy getUserMedia
-    if (navigator.getUserMedia) {{
-        navigator.getUserMedia = function(constraints, success, error) {{
-            console.log('[BrowserForge WebRTC] Legacy getUserMedia blocked');
-            if (error) {{
-                error(new DOMException('Permission denied', 'NotAllowedError'));
-            }}
-        }};
-    }}
-    
-    // Block mozGetUserMedia
-    if (navigator.mozGetUserMedia) {{
-        navigator.mozGetUserMedia = function() {{
-            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
-        }};
-    }}
-    
-    // Block webkitGetUserMedia
-    if (navigator.webkitGetUserMedia) {{
-        navigator.webkitGetUserMedia = function() {{
-            return Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
-        }};
-    }}
-    
-    // Block RTCDataChannel
-    if (typeof RTCDataChannel !== 'undefined') {{
-        delete window.RTCDataChannel;
-        Object.defineProperty(window, 'RTCDataChannel', {{
-            get: () => undefined,
-            configurable: false
-        }});
-    }}
-    
-    // Block RTCSessionDescription
-    if (typeof RTCSessionDescription !== 'undefined') {{
-        delete window.RTCSessionDescription;
-        Object.defineProperty(window, 'RTCSessionDescription', {{
-            get: () => undefined,
-            configurable: false
-        }});
-    }}
-    
-    // Block RTCIceCandidate
-    if (typeof RTCIceCandidate !== 'undefined') {{
-        delete window.RTCIceCandidate;
-        Object.defineProperty(window, 'RTCIceCandidate', {{
-            get: () => undefined,
-            configurable: false
-        }});
-    }}
-    
-    console.log('[BrowserForge WebRTC] ✅ COMPLETE WebRTC blocking active');
-    console.log('[BrowserForge WebRTC] ✅ No IP leaks possible - all WebRTC APIs disabled');
-}})();
-        """
-        
-        return script
+        # BrowserForge handles WebRTC mocking via fingerprint.inject()
+        # No need for custom script
+        return ""
     
     def is_browserforge_available(self) -> bool:
         """Check if BrowserForge is available"""
