@@ -71,13 +71,23 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 else:
                     logger.info(f"📱 Using standard profile: {enhanced_config.get('device_name')}")
                 
-                # Patchright launch args (minimal - no custom WebRTC flags)
+                # Patchright launch args with AGGRESSIVE WebRTC blocking
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
                     args=[
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
+                        
+                        # AGGRESSIVE WebRTC blocking at browser level
+                        '--disable-webrtc',
+                        '--disable-rtc-smoothness-algorithm',
+                        '--disable-webrtc-hw-decoding',
+                        '--disable-webrtc-hw-encoding',
+                        '--disable-webrtc-encryption',
+                        '--disable-webrtc-multiple-routes',
+                        '--enforce-webrtc-ip-permission-check',
+                        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
                     ]
                 )
                 
