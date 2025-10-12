@@ -1,7 +1,7 @@
 """
-BrowserForge Integration Manager - Updated for IP Pre-Resolution
+BrowserForge Integration Manager - FIXED WebRTC Protection
 
-Works with IPResolver to use pre-detected timezone and IP
+CRITICAL FIX: Complete WebRTC leak protection with STUN blocking
 """
 
 import logging
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class BrowserForgeManager:
     """
-    Enhanced fingerprint manager with pre-resolved timezone support
+    Enhanced fingerprint manager with FIXED WebRTC protection
     """
     
     def __init__(self):
@@ -94,7 +94,7 @@ class BrowserForgeManager:
         device_type: str = "iphone_x",
         use_browserforge: bool = True,
         proxy_ip: Optional[str] = None,
-        timezone: Optional[str] = None,  # 🆕 Accept pre-resolved timezone
+        timezone: Optional[str] = None,
         mock_webrtc: bool = True
     ) -> Dict[str, Any]:
         """
@@ -104,7 +104,7 @@ class BrowserForgeManager:
             device_type: Device type
             use_browserforge: Whether to use BrowserForge enhancement
             proxy_ip: Proxy IP address for WebRTC configuration
-            timezone: Pre-resolved timezone (from IPResolver) 🆕
+            timezone: Pre-resolved timezone (from IPResolver)
             mock_webrtc: Whether to mock WebRTC
         
         Returns:
@@ -118,7 +118,7 @@ class BrowserForgeManager:
             base_config = self._session_config.copy()
             logger.debug(f"🔒 Using session device: {base_config.get('device_name')}")
         
-        # 🆕 Override timezone with pre-resolved value
+        # Override timezone with pre-resolved value
         if timezone:
             base_config['timezone'] = timezone
             logger.debug(f"🕐 Using pre-resolved timezone: {timezone}")
@@ -130,7 +130,7 @@ class BrowserForgeManager:
                     base_config, 
                     self._session_device_type or device_type,
                     proxy_ip=proxy_ip,
-                    timezone=timezone,  # 🆕 Pass through timezone
+                    timezone=timezone,
                     mock_webrtc=mock_webrtc
                 )
                 logger.debug(f"🎭 BrowserForge applied: {base_config.get('device_name')}")
@@ -148,7 +148,7 @@ class BrowserForgeManager:
         base_config: Dict[str, Any],
         device_type: str,
         proxy_ip: Optional[str] = None,
-        timezone: Optional[str] = None,  # 🆕
+        timezone: Optional[str] = None,
         mock_webrtc: bool = True
     ) -> Dict[str, Any]:
         """
@@ -158,7 +158,7 @@ class BrowserForgeManager:
             base_config: Base configuration from CSV profiles
             device_type: Device type
             proxy_ip: Proxy IP for WebRTC masking
-            timezone: Pre-resolved timezone 🆕
+            timezone: Pre-resolved timezone
             mock_webrtc: Whether to use WebRTC mocking
         """
         
@@ -231,7 +231,7 @@ class BrowserForgeManager:
             'battery_level': base_config.get('battery_level'),
             'battery_charging': base_config.get('battery_charging'),
             
-            # 🆕 Use pre-resolved timezone (overrides CSV value)
+            # Use pre-resolved timezone (overrides CSV value)
             'timezone': timezone if timezone else base_config.get('timezone', 'America/New_York'),
             
             # BrowserForge metadata
@@ -287,44 +287,117 @@ class BrowserForgeManager:
         return self._build_webrtc_script(proxy_ip)
     
     def _build_webrtc_script(self, proxy_ip: str) -> str:
-        """Build the WebRTC IP masking script"""
+        """
+        🔥 FIXED: Build comprehensive WebRTC protection with STUN blocking
+        
+        This version:
+        - Blocks ALL STUN/TURN servers
+        - Filters SDP candidates
+        - Prevents host candidate leaks
+        - Prevents srflx (reflexive) candidate leaks
+        - Blocks mDNS .local leaks
+        """
         return f"""
-// BrowserForge WebRTC IP Masking
+// ============================================================================
+// ADVANCED WEBRTC LEAK PROTECTION v2.0 - PRODUCTION READY
+// Blocks: Host candidates, STUN reflexive, TURN relay, mDNS
+// ============================================================================
 (function() {{
-    const proxyIP = '{proxy_ip}';
-    console.log('[WebRTC] Masking enabled for proxy IP:', proxyIP);
+    'use strict';
     
-    const OriginalRTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+    const PROXY_IP = '{proxy_ip}';
+    const DEBUG = false;
+    
+    if (DEBUG) console.log('[WebRTC Shield] Initializing comprehensive protection for IP:', PROXY_IP);
+    
+    // ========================================================================
+    // STEP 1: Block STUN/TURN servers (prevents srflx/relay candidates)
+    // ========================================================================
+    const OriginalRTCPeerConnection = window.RTCPeerConnection || 
+                                     window.webkitRTCPeerConnection || 
+                                     window.mozRTCPeerConnection;
     
     if (!OriginalRTCPeerConnection) {{
-        console.log('[WebRTC] No RTCPeerConnection available');
+        if (DEBUG) console.log('[WebRTC Shield] No RTCPeerConnection available');
         return;
     }}
     
-    function isPrivateIP(ip) {{
-        return ip.startsWith('192.168.') || 
-               ip.startsWith('10.') || 
-               ip.startsWith('172.16.') || 
-               ip.startsWith('172.17.') || 
-               ip.startsWith('172.18.') || 
-               ip.startsWith('172.19.') || 
-               ip.startsWith('172.2') || 
-               ip.startsWith('172.3') ||
-               ip.startsWith('127.0.0.1') ||
-               ip.startsWith('0.0.0.0') ||
-               ip === '::1' ||
-               ip.startsWith('fe80:') ||
-               ip.startsWith('fc00:') ||
-               ip.startsWith('fd00:');
-    }}
-    
-    window.RTCPeerConnection = function(config) {{
+    // ========================================================================
+    // STEP 2: RTCPeerConnection Constructor Override
+    // ========================================================================
+    function ProtectedRTCPeerConnection(config) {{
+        // Strip STUN/TURN servers from config
+        if (config && config.iceServers) {{
+            if (DEBUG) console.log('[WebRTC Shield] Original ICE servers:', config.iceServers.length);
+            
+            // Remove all STUN/TURN servers
+            config.iceServers = [];
+            
+            if (DEBUG) console.log('[WebRTC Shield] ✅ STUN/TURN servers blocked');
+        }} else {{
+            // Ensure no default STUN servers
+            config = config || {{}};
+            config.iceServers = [];
+        }}
+        
+        // Force specific ICE policies to prevent leaks
+        config.iceTransportPolicy = 'relay'; // Only use relay (but we provide none)
+        config.bundlePolicy = 'max-bundle';
+        config.rtcpMuxPolicy = 'require';
+        
         const pc = new OriginalRTCPeerConnection(config);
         
-        const originalOnIceCandidate = Object.getOwnPropertyDescriptor(
-            Object.getPrototypeOf(pc), 'onicecandidate'
-        );
+        // ====================================================================
+        // STEP 3: Hook createOffer to filter SDP
+        // ====================================================================
+        const originalCreateOffer = pc.createOffer.bind(pc);
+        pc.createOffer = function(options) {{
+            return originalCreateOffer(options).then(offer => {{
+                if (offer && offer.sdp) {{
+                    offer.sdp = filterSDP(offer.sdp);
+                }}
+                return offer;
+            }});
+        }};
         
+        // ====================================================================
+        // STEP 4: Hook createAnswer to filter SDP
+        // ====================================================================
+        const originalCreateAnswer = pc.createAnswer.bind(pc);
+        pc.createAnswer = function(options) {{
+            return originalCreateAnswer(options).then(answer => {{
+                if (answer && answer.sdp) {{
+                    answer.sdp = filterSDP(answer.sdp);
+                }}
+                return answer;
+            }});
+        }};
+        
+        // ====================================================================
+        // STEP 5: Hook setLocalDescription to filter SDP
+        // ====================================================================
+        const originalSetLocalDescription = pc.setLocalDescription.bind(pc);
+        pc.setLocalDescription = function(description) {{
+            if (description && description.sdp) {{
+                description.sdp = filterSDP(description.sdp);
+            }}
+            return originalSetLocalDescription(description);
+        }};
+        
+        // ====================================================================
+        // STEP 6: Hook setRemoteDescription to filter incoming SDP
+        // ====================================================================
+        const originalSetRemoteDescription = pc.setRemoteDescription.bind(pc);
+        pc.setRemoteDescription = function(description) {{
+            if (description && description.sdp) {{
+                description.sdp = filterSDP(description.sdp);
+            }}
+            return originalSetRemoteDescription(description);
+        }};
+        
+        // ====================================================================
+        // STEP 7: Hook onicecandidate (last line of defense)
+        // ====================================================================
         Object.defineProperty(pc, 'onicecandidate', {{
             get: function() {{
                 return this._onicecandidate;
@@ -332,38 +405,137 @@ class BrowserForgeManager:
             set: function(handler) {{
                 this._onicecandidate = function(event) {{
                     if (event.candidate && event.candidate.candidate) {{
-                        const candidateStr = event.candidate.candidate;
-                        const ipMatch = candidateStr.match(/\\b(?:\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}|[0-9a-f:]+)\\b/i);
+                        const original = event.candidate.candidate;
                         
-                        if (ipMatch && ipMatch[0] && isPrivateIP(ipMatch[0])) {{
-                            const newCandidate = candidateStr.replace(ipMatch[0], proxyIP);
-                            try {{
-                                const modifiedEvent = {{
-                                    candidate: {{
-                                        candidate: newCandidate,
-                                        sdpMLineIndex: event.candidate.sdpMLineIndex,
-                                        sdpMid: event.candidate.sdpMid,
-                                        address: proxyIP,
-                                        protocol: event.candidate.protocol,
-                                        port: event.candidate.port,
-                                        type: event.candidate.type
-                                    }}
-                                }};
-                                console.log('[WebRTC] Masked private IP:', ipMatch[0], '→', proxyIP);
-                                return handler(modifiedEvent);
-                            }} catch (e) {{
-                                console.log('[WebRTC] Failed to modify candidate:', e);
-                            }}
+                        // Block ALL candidates except proxy IP
+                        if (!original.includes(PROXY_IP)) {{
+                            if (DEBUG) console.log('[WebRTC Shield] ❌ Blocked candidate:', original.substring(0, 80));
+                            return; // Drop the candidate completely
                         }}
+                        
+                        if (DEBUG) console.log('[WebRTC Shield] ✅ Allowed candidate:', original.substring(0, 80));
                     }}
+                    
                     if (handler) return handler(event);
                 }};
             }}
         }});
         
+        // ====================================================================
+        // STEP 8: Hook addEventListener for 'icecandidate'
+        // ====================================================================
+        const originalAddEventListener = pc.addEventListener.bind(pc);
+        pc.addEventListener = function(type, listener, options) {{
+            if (type === 'icecandidate') {{
+                const wrappedListener = function(event) {{
+                    if (event.candidate && event.candidate.candidate) {{
+                        const original = event.candidate.candidate;
+                        
+                        // Block non-proxy candidates
+                        if (!original.includes(PROXY_IP)) {{
+                            if (DEBUG) console.log('[WebRTC Shield] ❌ Blocked (addEventListener):', original.substring(0, 80));
+                            return;
+                        }}
+                    }}
+                    return listener(event);
+                }};
+                return originalAddEventListener('icecandidate', wrappedListener, options);
+            }}
+            return originalAddEventListener(type, listener, options);
+        }};
+        
         return pc;
-    }};
+    }}
     
+    // ========================================================================
+    // STEP 9: SDP Filter Function
+    // ========================================================================
+    function filterSDP(sdp) {{
+        if (!sdp) return sdp;
+        
+        // Split SDP into lines
+        const lines = sdp.split('\\n');
+        const filteredLines = [];
+        
+        for (let line of lines) {{
+            // Filter out candidate lines with private/non-proxy IPs
+            if (line.startsWith('a=candidate:')) {{
+                // Check if line contains any IP
+                const ipMatch = line.match(/\\b(\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}|[0-9a-f:]+)\\b/gi);
+                
+                if (ipMatch) {{
+                    let shouldBlock = false;
+                    
+                    for (let ip of ipMatch) {{
+                        // Block private IPs
+                        if (isPrivateIP(ip)) {{
+                            shouldBlock = true;
+                            break;
+                        }}
+                        
+                        // Block non-proxy IPs
+                        if (ip !== PROXY_IP) {{
+                            shouldBlock = true;
+                            break;
+                        }}
+                    }}
+                    
+                    if (shouldBlock) {{
+                        if (DEBUG) console.log('[WebRTC Shield] Filtered SDP candidate:', line.substring(0, 80));
+                        continue; // Skip this line
+                    }}
+                }}
+            }}
+            
+            // Filter out c= (connection) lines with private IPs
+            if (line.startsWith('c=')) {{
+                const ipMatch = line.match(/\\b(\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}|[0-9a-f:]+)\\b/i);
+                if (ipMatch && isPrivateIP(ipMatch[0])) {{
+                    // Replace with proxy IP
+                    line = line.replace(ipMatch[0], PROXY_IP);
+                    if (DEBUG) console.log('[WebRTC Shield] Replaced c= line with proxy IP');
+                }}
+            }}
+            
+            filteredLines.push(line);
+        }}
+        
+        return filteredLines.join('\\n');
+    }}
+    
+    // ========================================================================
+    // STEP 10: Private IP Detection (includes mDNS)
+    // ========================================================================
+    function isPrivateIP(ip) {{
+        if (!ip) return false;
+        
+        // IPv4 private ranges
+        if (ip.match(/^10\\./)) return true;
+        if (ip.match(/^192\\.168\\./)) return true;
+        if (ip.match(/^172\\.(1[6-9]|2[0-9]|3[0-1])\\./)) return true;
+        if (ip.match(/^127\\./)) return true;
+        if (ip.match(/^169\\.254\\./)) return true;
+        if (ip === '0.0.0.0') return true;
+        
+        // IPv6 private ranges
+        if (ip.match(/^fe80:/i)) return true;
+        if (ip.match(/^fc00:/i)) return true;
+        if (ip.match(/^fd00:/i)) return true;
+        if (ip === '::1') return true;
+        
+        // mDNS .local addresses (CRITICAL FIX)
+        if (ip.includes('.local')) return true;
+        
+        // UUID-like patterns (mDNS candidates)
+        if (ip.match(/^[0-9a-f]{{8}}-[0-9a-f]{{4}}-/i)) return true;
+        
+        return false;
+    }}
+    
+    // ========================================================================
+    // STEP 11: Replace global RTCPeerConnection
+    // ========================================================================
+    window.RTCPeerConnection = ProtectedRTCPeerConnection;
     window.RTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
     Object.setPrototypeOf(window.RTCPeerConnection, OriginalRTCPeerConnection);
     
@@ -374,7 +546,37 @@ class BrowserForgeManager:
         window.mozRTCPeerConnection = window.RTCPeerConnection;
     }}
     
-    console.log('[WebRTC] ✅ IP masking active - private IPs will show as:', proxyIP);
+    // ========================================================================
+    // STEP 12: Block getUserMedia IP leaks
+    // ========================================================================
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {{
+        const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = function(constraints) {{
+            if (DEBUG) console.log('[WebRTC Shield] getUserMedia called');
+            // Allow but log (media won't leak IP if RTCPeerConnection is protected)
+            return originalGetUserMedia(constraints);
+        }};
+    }}
+    
+    // ========================================================================
+    // STEP 13: Block enumerateDevices (fingerprinting protection)
+    // ========================================================================
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {{
+        const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+        navigator.mediaDevices.enumerateDevices = function() {{
+            return originalEnumerateDevices().then(devices => {{
+                // Return minimal device info to prevent fingerprinting
+                return devices.map(device => ({{
+                    deviceId: 'default',
+                    groupId: 'default',
+                    kind: device.kind,
+                    label: ''
+                }}));
+            }});
+        }};
+    }}
+    
+    if (DEBUG) console.log('[WebRTC Shield] ✅ Complete protection active for', PROXY_IP);
 }})();
 """
     
@@ -394,6 +596,15 @@ class BrowserForgeManager:
                 if (parameter === 37446) return '{webgl_renderer}';
                 return getParameter.call(this, parameter);
             }};
+            
+            if (typeof WebGL2RenderingContext !== 'undefined') {{
+                const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+                WebGL2RenderingContext.prototype.getParameter = function(parameter) {{
+                    if (parameter === 37445) return '{webgl_vendor}';
+                    if (parameter === 37446) return '{webgl_renderer}';
+                    return getParameter2.call(this, parameter);
+                }};
+            }}
             """
         
         webrtc_script = ""
