@@ -194,31 +194,7 @@ class TimezoneManager:
         except Exception as e:
             logger.warning(f"⚠️ GeoIP init failed: {e}")
     
-    def detect_timezone_from_ip(self, ip_address: str) -> Optional[str]:
-        """
-        Detect timezone from IP address using GeoIP
-        
-        Args:
-            ip_address: IP address to lookup
-        
-        Returns:
-            IANA timezone string or None
-        """
-        if not ip_address:
-            return None
-        
-        # Try GeoIP database first
-        if self.geoip_db:
-            try:
-                record = self.geoip_db.record_by_addr(ip_address)
-                if record:
-                    city = record.get('city', '').lower()
-                    country_code = record.get('country_code', '')
-                    
-                    logger.debug(f"GeoIP lookup: {ip_address} → {city}, {country_code}")
-                    
-                    # Try city-based mapping first (most accurate)
-                    if city and city in self.CITY_TIMEZONE_MAP:
+ self.CITY_TIMEZONE_MAP:
                         timezone = self.CITY_TIMEZONE_MAP[city]
                         logger.info(f"🌍 Timezone detected from city: {city} → {timezone}")
                         return timezone
@@ -278,7 +254,7 @@ class TimezoneManager:
         
         # If no proxy IP, keep original
         if not proxy_ip:
-            logger.debug(f"🕐 No proxy IP - keeping original timezone: {original_timezone}")
+            logger.debug(f"🕐 No proxy IP provided - keeping timezone: {original_timezone}")
             return config
         
         # Detect timezone from proxy IP
@@ -287,12 +263,12 @@ class TimezoneManager:
         if detected_timezone:
             config['timezone'] = detected_timezone
             if detected_timezone != original_timezone:
-                logger.info(f"🕐 Timezone updated: {original_timezone} → {detected_timezone} (proxy: {proxy_ip})")
+                logger.info(f"🕐 Timezone corrected: {original_timezone} → {detected_timezone} (IP: {proxy_ip})")
             else:
                 logger.debug(f"🕐 Timezone already correct: {detected_timezone}")
         else:
-            # Keep original if detection failed
-            logger.warning(f"⚠️ Timezone detection failed - keeping original: {original_timezone}")
+            # Keep original if detection completely failed (shouldn't happen now with default)
+            logger.debug(f"🕐 No timezone detected - keeping original: {original_timezone}")
         
         return config
     
