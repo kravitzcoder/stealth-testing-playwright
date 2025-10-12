@@ -1,15 +1,7 @@
 """
-BASE RUNNER - Enhanced with BrowserForge (WebRTC via BrowserForge only)
+BASE RUNNER - Enhanced with BrowserForge + Timezone Fix
 
-Contains common code used by all specialized runners:
-- Proxy configuration
-- IP detection
-- Mobile UA checking
-- Screenshot coordination
-- BrowserForge fingerprint enhancement
-- Session management for device consistency
-
-NO custom WebRTC blocking - uses BrowserForge's native approach
+CRITICAL FIX: Timezone now automatically matches proxy IP geolocation
 """
 
 import logging
@@ -21,6 +13,7 @@ from pathlib import Path
 from ..core.test_result import TestResult
 from ..core.screenshot_engine import ScreenshotEngine
 from ..utils.browserforge_manager import BrowserForgeManager
+from ..utils.timezone_manager import TimezoneManager  # NEW
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +22,15 @@ class BaseRunner:
     """Base class with shared functionality for all runners"""
     
     def __init__(self, screenshot_engine: Optional[ScreenshotEngine] = None):
-        """Initialize base runner with BrowserForge enhancement"""
+        """Initialize base runner with BrowserForge enhancement + Timezone Manager"""
         self.screenshot_engine = screenshot_engine or ScreenshotEngine()
         
         # Initialize BrowserForge manager
         self.browserforge = BrowserForgeManager()
+        
+        # Initialize Timezone Manager (NEW)
+        self.timezone_manager = TimezoneManager()
+        logger.info("🕐 Timezone manager initialized")
         
         # Log fingerprint capabilities
         stats = self.browserforge.get_fingerprint_stats()
@@ -89,16 +86,16 @@ class BaseRunner:
         proxy_ip: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Get enhanced mobile config with BrowserForge fingerprints
+        Get enhanced mobile config with BrowserForge fingerprints + TIMEZONE FIX
         
         Args:
             mobile_config: Base mobile config from test_targets.json (NOT USED if session active)
             device_type: Device type for profile selection
             use_browserforge: Whether to apply BrowserForge enhancement
-            proxy_ip: Proxy IP address for WebRTC configuration
+            proxy_ip: Proxy IP address for WebRTC configuration AND TIMEZONE DETECTION
         
         Returns:
-            Enhanced mobile configuration (SESSION CONSISTENT)
+            Enhanced mobile configuration with corrected timezone
         """
         # Ensure session is started
         if not self._session_started:
@@ -113,19 +110,39 @@ class BaseRunner:
                 proxy_ip=proxy_ip
             )
             
+            # CRITICAL FIX: Override timezone based on proxy IP
+            enhanced = self.timezone_manager.override_timezone_in_config(
+                config=enhanced,
+                proxy_ip=proxy_ip
+            )
+            
             return enhanced
         else:
             # Fallback to session config (still consistent!)
             session_config = self.browserforge.get_session_config()
             if session_config:
-                # Add proxy IP even for basic config
+                # Add proxy IP
                 if proxy_ip:
                     session_config['_proxy_ip'] = proxy_ip
+                
+                # CRITICAL FIX: Override timezone even for basic config
+                session_config = self.timezone_manager.override_timezone_in_config(
+                    config=session_config,
+                    proxy_ip=proxy_ip
+                )
+                
                 return session_config
             else:
                 # Last resort: use provided config
                 if proxy_ip:
                     mobile_config['_proxy_ip'] = proxy_ip
+                
+                # CRITICAL FIX: Override timezone
+                mobile_config = self.timezone_manager.override_timezone_in_config(
+                    config=mobile_config,
+                    proxy_ip=proxy_ip
+                )
+                
                 return mobile_config
     
     def _build_proxy(self, proxy_config: Dict[str, str]) -> Optional[Dict[str, Any]]:
