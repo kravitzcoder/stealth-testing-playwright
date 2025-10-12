@@ -232,7 +232,7 @@ class BrowserForgeManager:
             'battery_charging': base_config.get('battery_charging'),
             
             # 🆕 Use pre-resolved timezone (overrides CSV value)
-            'timezone': timezone if timezone else base_config.get('timezone', 'America/Los_Angeles'),
+            'timezone': timezone if timezone else base_config.get('timezone', 'America/New_York'),
             
             # BrowserForge metadata
             '_browserforge_enhanced': True,
