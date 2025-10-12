@@ -83,7 +83,8 @@ class BaseRunner:
         mobile_config: Dict[str, Any],
         device_type: str = "iphone_x",
         use_browserforge: bool = True,
-        proxy_ip: Optional[str] = None
+        proxy_ip: Optional[str] = None,
+        detected_ip: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get enhanced mobile config with BrowserForge fingerprints + TIMEZONE FIX
@@ -92,7 +93,8 @@ class BaseRunner:
             mobile_config: Base mobile config from test_targets.json (NOT USED if session active)
             device_type: Device type for profile selection
             use_browserforge: Whether to apply BrowserForge enhancement
-            proxy_ip: Proxy IP address for WebRTC configuration AND TIMEZONE DETECTION
+            proxy_ip: Proxy IP address for WebRTC configuration
+            detected_ip: Actually detected IP from page (used for timezone detection)
         
         Returns:
             Enhanced mobile configuration with corrected timezone
@@ -102,6 +104,9 @@ class BaseRunner:
             logger.warning("⚠️ Session not started, auto-starting")
             self.start_session(device_type)
         
+        # Use detected_ip for timezone if available, fallback to proxy_ip
+        timezone_ip = detected_ip or proxy_ip
+        
         if use_browserforge and self.browserforge.is_browserforge_available():
             # Generate enhanced fingerprint with proxy IP for WebRTC
             enhanced = self.browserforge.generate_enhanced_fingerprint(
@@ -110,11 +115,12 @@ class BaseRunner:
                 proxy_ip=proxy_ip
             )
             
-            # CRITICAL FIX: Override timezone based on proxy IP
-            enhanced = self.timezone_manager.override_timezone_in_config(
-                config=enhanced,
-                proxy_ip=proxy_ip
-            )
+            # CRITICAL FIX: Override timezone based on detected IP
+            if timezone_ip:
+                enhanced = self.timezone_manager.override_timezone_in_config(
+                    config=enhanced,
+                    proxy_ip=timezone_ip
+                )
             
             return enhanced
         else:
@@ -126,10 +132,11 @@ class BaseRunner:
                     session_config['_proxy_ip'] = proxy_ip
                 
                 # CRITICAL FIX: Override timezone even for basic config
-                session_config = self.timezone_manager.override_timezone_in_config(
-                    config=session_config,
-                    proxy_ip=proxy_ip
-                )
+                if timezone_ip:
+                    session_config = self.timezone_manager.override_timezone_in_config(
+                        config=session_config,
+                        proxy_ip=timezone_ip
+                    )
                 
                 return session_config
             else:
@@ -138,10 +145,11 @@ class BaseRunner:
                     mobile_config['_proxy_ip'] = proxy_ip
                 
                 # CRITICAL FIX: Override timezone
-                mobile_config = self.timezone_manager.override_timezone_in_config(
-                    config=mobile_config,
-                    proxy_ip=proxy_ip
-                )
+                if timezone_ip:
+                    mobile_config = self.timezone_manager.override_timezone_in_config(
+                        config=mobile_config,
+                        proxy_ip=timezone_ip
+                    )
                 
                 return mobile_config
     
