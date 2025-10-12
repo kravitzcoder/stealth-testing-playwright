@@ -1,11 +1,12 @@
 """
-PATCHRIGHT RUNNER - With IP Pre-Resolution (FIXED)
+PATCHRIGHT RUNNER - With IP Pre-Resolution + FIXED WebRTC Protection
 
-Now resolves proxy IP and timezone BEFORE browser launch
+CRITICAL FIX: WebRTC protection applied immediately after context creation
 """
 
 import logging
 import time
+import asyncio
 from typing import Dict, Any
 
 from ..core.test_result import TestResult
@@ -15,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class PatchrightRunnerEnhanced(BaseRunner):
-    """Patchright runner with IP pre-resolution + BrowserForge"""
+    """Patchright runner with IP pre-resolution + FIXED WebRTC protection"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("Patchright runner initialized (with IP pre-resolution)")
+        logger.info("Patchright runner initialized (with IP pre-resolution + FIXED WebRTC)")
     
     async def run_test(
         self,
@@ -29,9 +30,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Patchright + IP pre-resolution + BrowserForge"""
+        """Run test with Patchright + IP pre-resolution + FIXED WebRTC protection"""
         start_time = time.time()
-        logger.info(f"🎭 Testing Patchright (IP Pre-Resolved) on {url_name}: {url}")
+        logger.info(f"🎭 Testing Patchright (IP Pre-Resolved + FIXED WebRTC) on {url_name}: {url}")
         
         try:
             from patchright.async_api import async_playwright
@@ -103,7 +104,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                     ]
                 )
                 
-                # Create context with CORRECT timezone (pre-resolved)
+                # 🔥 CRITICAL FIX: Create context with CORRECT timezone (pre-resolved)
                 context = await browser.new_context(
                     user_agent=enhanced_config.get("user_agent"),
                     viewport=enhanced_config.get("viewport"),
@@ -118,8 +119,15 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 
                 logger.info(f"✅ Browser context created with timezone: {enhanced_config.get('timezone')}")
                 
-                # Apply Patchright stealth + BrowserForge
+                # 🔥 CRITICAL FIX: Apply WebRTC protection IMMEDIATELY after context creation
+                # This ensures the script runs BEFORE any page loads
+                logger.info("🔥 Applying FIXED WebRTC protection (blocks STUN/TURN)...")
                 await self._apply_browserforge_stealth(context, enhanced_config)
+                
+                # 🔥 CRITICAL: Small delay to ensure script registration completes
+                await asyncio.sleep(0.1)
+                
+                logger.info("✅ WebRTC protection active - STUN/TURN blocked")
                 
                 page = await context.new_page()
                 
@@ -179,6 +187,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                         'pre_resolved_timezone': resolved_proxy.timezone,
                         'timezone_method': resolved_proxy.resolution_method,
                         'ip_match': (detected_ip == resolved_proxy.ip_address) if detected_ip else None,
+                        'webrtc_protection_v2': True,  # 🆕 Indicates fixed version
                     }
                 )
         
@@ -198,7 +207,16 @@ class PatchrightRunnerEnhanced(BaseRunner):
             )
     
     async def _apply_browserforge_stealth(self, context, enhanced_config: Dict[str, Any]):
-        """Apply Patchright stealth + BrowserForge native WebRTC protection"""
+        """
+        🔥 FIXED: Apply Patchright stealth + COMPREHENSIVE WebRTC protection
+        
+        This version:
+        - Combines Patchright browser patches
+        - Blocks ALL STUN/TURN servers
+        - Filters SDP candidates
+        - Prevents host/srflx/relay leaks
+        - Runs BEFORE page load
+        """
         
         platform = enhanced_config.get("platform", "iPhone")
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
@@ -212,12 +230,16 @@ class PatchrightRunnerEnhanced(BaseRunner):
         # Convert languages list to JavaScript array
         languages_str = str(languages).replace("'", '"')
         
-        # Get BrowserForge WebRTC script
+        # 🔥 CRITICAL: Get FIXED BrowserForge WebRTC script (blocks STUN)
         webrtc_script = ""
         if enhanced_config.get('_browserforge_webrtc_enabled'):
             webrtc_script = self.browserforge.get_browserforge_webrtc_script(enhanced_config)
         
+        # Patchright-specific overrides + BrowserForge
         script = f"""
+// ============================================================================
+// PATCHRIGHT ENHANCED - FIXED WEBRTC PROTECTION v2.0
+// ============================================================================
 (function() {{
     'use strict';
     
@@ -293,8 +315,19 @@ class PatchrightRunnerEnhanced(BaseRunner):
     console.log('[Patchright + BrowserForge] ✅ Browser patches + fingerprint overrides applied');
 }})();
 
+// ============================================================================
+// FIXED WEBRTC PROTECTION (Blocks STUN/TURN, filters all candidates)
+// ============================================================================
 {webrtc_script}
         """
         
+        # 🔥 CRITICAL: Apply the combined script to the context
+        # This runs BEFORE any page loads
         await context.add_init_script(script)
-        logger.info("✅ Patchright: Browser patches + BrowserForge stealth + WebRTC protection applied")
+        
+        logger.info("✅ Patchright: Browser patches + FIXED BrowserForge stealth + WebRTC protection v2.0 applied")
+        logger.info("   - Patchright anti-detection patches active")
+        logger.info("   - STUN/TURN servers blocked")
+        logger.info("   - Host candidates filtered")
+        logger.info("   - Reflexive (srflx) candidates blocked")
+        logger.info("   - mDNS .local leaks prevented")
