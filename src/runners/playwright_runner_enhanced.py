@@ -1,7 +1,8 @@
 """
-PLAYWRIGHT RUNNER - BrowserForge Native WebRTC Implementation
+PLAYWRIGHT RUNNER - BrowserForge Native WebRTC Implementation (CLEANED)
 
-Uses BrowserForge's intelligent WebRTC handling instead of custom blocking
+Uses BrowserForge's intelligent WebRTC handling - NO custom blocking
+All WebRTC is handled by BrowserForge's injection script
 """
 
 import logging
@@ -55,7 +56,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 # Extract proxy IP for WebRTC masking
                 proxy_ip = proxy_config.get("host") if proxy_config.get("host") else None
                 
-                # Launch with minimal args (no custom WebRTC flags)
+                # Launch with minimal args - NO WebRTC blocking!
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
@@ -95,13 +96,10 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                     geolocation={"latitude": 37.7749, "longitude": -122.4194}
                 )
                 
-                # Apply BrowserForge stealth with proper WebRTC injection
+                # Apply BrowserForge stealth with WebRTC injection
                 await self._apply_browserforge_stealth(context, enhanced_config)
                 
                 page = await context.new_page()
-                
-                # Additional page-level injection if needed
-                await self.browserforge.inject_fingerprint_to_page(page, enhanced_config)
                 
                 logger.info(f"Navigating to {url}")
                 await page.goto(url, wait_until="networkidle", timeout=60000)
@@ -117,21 +115,6 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 # Check results
                 proxy_working, detected_ip = await self._check_proxy(page, proxy_config)
                 is_mobile = await self._check_mobile_ua(page, enhanced_config)
-                
-                # Debug: Check WebRTC status
-                try:
-                    webrtc_ips = await page.evaluate("""
-                        () => {
-                            // Try to detect WebRTC leak
-                            if (typeof RTCPeerConnection !== 'undefined') {
-                                return 'RTCPeerConnection exists';
-                            }
-                            return 'No RTCPeerConnection';
-                        }
-                    """)
-                    logger.debug(f"WebRTC check: {webrtc_ips}")
-                except:
-                    pass
                 
                 await browser.close()
                 
@@ -177,34 +160,22 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         """
         Apply BrowserForge stealth with native WebRTC protection
         
-        This combines BrowserForge's fingerprint injection with additional stealth
+        CLEANED: Only BrowserForge injection, no custom WebRTC blocking
         """
         
-        # Get BrowserForge injection script if available
+        # Get BrowserForge injection script (includes WebRTC masking)
         browserforge_script = self.browserforge.get_browserforge_injection_script(enhanced_config)
         
         # Prepare additional stealth overrides
         platform = enhanced_config.get('platform', 'iPhone')
-        hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
-        device_memory = enhanced_config.get('device_memory', 4)
-        webgl_vendor = enhanced_config.get('webgl_vendor', 'Apple Inc.')
-        webgl_renderer = enhanced_config.get('webgl_renderer', 'Apple GPU')
-        language = enhanced_config.get('language', 'en-US')
-        languages = enhanced_config.get('languages', ['en-US', 'en'])
+        max_touch_points = enhanced_config.get('max_touch_points', 5)
         
-        # Convert languages list to JavaScript array string
-        languages_str = str(languages).replace("'", '"')
-        
-        # Combine BrowserForge injection with additional stealth
-        combined_script = f"""
-// BrowserForge Injection (includes WebRTC mocking)
-{browserforge_script}
-
-// Additional stealth overrides
+        # Minimal additional stealth (BrowserForge handles most of this)
+        additional_script = f"""
 (function() {{
     'use strict';
     
-    console.log('[Enhanced Stealth] Applying additional overrides');
+    console.log('[Playwright Enhanced] Applying minimal stealth overrides');
     
     // Hide webdriver (if not already done by BrowserForge)
     if (navigator.webdriver) {{
@@ -254,10 +225,19 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         }});
     }}
     
-    console.log('[Enhanced Stealth] ✅ All overrides applied');
+    console.log('[Playwright Enhanced] ✅ Minimal overrides applied');
 }})();
+"""
+        
+        # Combine BrowserForge injection with additional stealth
+        combined_script = f"""
+// BrowserForge Injection (includes WebRTC masking)
+{browserforge_script}
+
+// Additional compatibility overrides
+{additional_script}
 """
         
         # Apply the combined script to the context
         await context.add_init_script(combined_script)
-        logger.info("✅ BrowserForge stealth + WebRTC protection applied to context")
+        logger.info("✅ Playwright: BrowserForge stealth + WebRTC protection applied")
