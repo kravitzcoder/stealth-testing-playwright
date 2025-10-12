@@ -316,10 +316,10 @@ class IPResolver:
         Detect US timezone from latitude/longitude coordinates
         
         Uses approximate longitude boundaries for US timezones:
-        - Pacific: > -125 (West of -125°)
-        - Mountain: -125 to -104
+        - Pacific: < -120 (More negative = further West)
+        - Mountain: -120 to -104
         - Central: -104 to -87  
-        - Eastern: < -87 (East of -87°)
+        - Eastern: > -87 (Less negative = further East)
         
         Args:
             latitude: Latitude coordinate
@@ -331,18 +331,24 @@ class IPResolver:
         if not latitude or not longitude:
             return None
         
-        # US timezone boundaries (approximate)
-        if longitude > -104:  # West of -104° = Pacific/Mountain boundary
-            # Check if Mountain (Arizona, Colorado, Utah, etc.)
-            # Arizona (Phoenix area) doesn't observe DST
-            if 31 <= latitude <= 37 and -114.8 <= longitude <= -109:  # Arizona region
+        # US timezone boundaries (longitude gets MORE negative going West)
+        # Pacific is most negative (westernmost)
+        if longitude < -120:  # 🆕 FIXED: West of -120° = Pacific
+            # Check if Arizona (Phoenix area) - doesn't observe DST
+            if 31 <= latitude <= 37 and -114.8 <= longitude <= -109:
                 return 'America/Phoenix'  # No DST
             return 'America/Los_Angeles'  # Pacific Time
         
-        elif -104 >= longitude > -87:  # Central timezone
+        elif -120 <= longitude < -104:  # Mountain timezone
+            # Check if Arizona/Phoenix area
+            if 31 <= latitude <= 37 and -114.8 <= longitude <= -109:
+                return 'America/Phoenix'
+            return 'America/Denver'  # Mountain Time
+        
+        elif -104 <= longitude < -87:  # Central timezone
             return 'America/Chicago'
         
-        else:  # East of -87° = Eastern
+        else:  # East of -87° = Eastern (least negative)
             return 'America/New_York'
     
     def get_cached_resolution(self, hostname: str) -> Optional[ResolvedProxy]:
