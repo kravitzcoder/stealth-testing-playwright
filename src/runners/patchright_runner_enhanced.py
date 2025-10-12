@@ -325,9 +325,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
         # This runs BEFORE any page loads
         await context.add_init_script(script)
         
-        logger.info("✅ Patchright: Browser patches + FIXED BrowserForge stealth + WebRTC protection v2.0 applied")
+        logger.info("✅ Patchright: Browser patches + BrowserForge stealth + WebRTC protection v3.0 BALANCED applied")
         logger.info("   - Patchright anti-detection patches active")
-        logger.info("   - STUN/TURN servers blocked")
-        logger.info("   - Host candidates filtered")
-        logger.info("   - Reflexive (srflx) candidates blocked")
+        logger.info("   - Proxy IP injection enabled")
+        logger.info("   - Private IP candidates blocked")
+        logger.info("   - Fake candidates with proxy IP injected")
         logger.info("   - mDNS .local leaks prevented")
