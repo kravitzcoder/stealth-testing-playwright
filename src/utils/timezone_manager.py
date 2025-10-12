@@ -20,10 +20,13 @@ class TimezoneManager:
         # United States - Major Cities
         'los angeles': 'America/Los_Angeles',
         'san francisco': 'America/Los_Angeles',
+        'san jose': 'America/Los_Angeles',  # 🆕 ADDED - Silicon Valley
         'seattle': 'America/Los_Angeles',
         'portland': 'America/Los_Angeles',
         'las vegas': 'America/Los_Angeles',
         'san diego': 'America/Los_Angeles',
+        'sacramento': 'America/Los_Angeles',
+        'oakland': 'America/Los_Angeles',
         'phoenix': 'America/Phoenix',
         'denver': 'America/Denver',
         'salt lake city': 'America/Denver',
@@ -240,7 +243,7 @@ class TimezoneManager:
         # This is now mainly a fallback - IPResolver handles the main logic
         # Just return default for US proxies
         logger.debug(f"   Using default US timezone")
-        return 'America/Los_Angeles'
+        return 'America/New_York'
     
     def get_timezone_for_location(
         self,
@@ -318,7 +321,7 @@ class TimezoneManager:
         Returns:
             Updated configuration with corrected timezone
         """
-        original_timezone = config.get('timezone', 'America/Los_Angeles')
+        original_timezone = config.get('timezone', 'America/New_York')
         
         # If force_timezone is provided, use it
         if force_timezone:
