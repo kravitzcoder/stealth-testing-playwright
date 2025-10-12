@@ -194,7 +194,33 @@ class TimezoneManager:
         except Exception as e:
             logger.warning(f"⚠️ GeoIP init failed: {e}")
     
- self.CITY_TIMEZONE_MAP:
+    def detect_timezone_from_ip(self, ip_address: str) -> Optional[str]:
+        """
+        Detect timezone from IP address using multiple methods
+        
+        Args:
+            ip_address: IP address to lookup
+        
+        Returns:
+            IANA timezone string or None
+        """
+        if not ip_address:
+            return None
+        
+        logger.debug(f"🔍 Attempting timezone detection for IP: {ip_address}")
+        
+        # Try GeoIP database first (most accurate)
+        if self.geoip_db:
+            try:
+                record = self.geoip_db.record_by_addr(ip_address)
+                if record:
+                    city = record.get('city', '').lower()
+                    country_code = record.get('country_code', '')
+                    
+                    logger.debug(f"GeoIP lookup: {ip_address} → {city}, {country_code}")
+                    
+                    # Try city-based mapping first (most accurate)
+                    if city and city in self.CITY_TIMEZONE_MAP:
                         timezone = self.CITY_TIMEZONE_MAP[city]
                         logger.info(f"🌍 Timezone detected from city: {city} → {timezone}")
                         return timezone
@@ -208,7 +234,28 @@ class TimezoneManager:
             except Exception as e:
                 logger.debug(f"GeoIP lookup failed for {ip_address}: {e}")
         
-        # Fallback: Try to reverse DNS lookup
+        # Method 2: Try online IP API (fallback when GeoIP unavailable)
+        try:
+            import requests
+            response = requests.get(
+                f"http://ip-api.com/json/{ip_address}?fields=status,timezone,city,country",
+                timeout=3
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    detected_timezone = data.get('timezone')
+                    city = data.get('city', 'Unknown')
+                    country = data.get('country', 'Unknown')
+                    
+                    if detected_timezone:
+                        logger.info(f"🌍 Timezone detected from IP-API: {city}, {country} → {detected_timezone}")
+                        return detected_timezone
+        
+        except Exception as e:
+            logger.debug(f"IP-API lookup failed: {e}")
+        
+        # Method 3: Reverse DNS lookup
         try:
             hostname = socket.gethostbyaddr(ip_address)[0].lower()
             logger.debug(f"Reverse DNS: {ip_address} → {hostname}")
@@ -219,13 +266,27 @@ class TimezoneManager:
                 if city_key in hostname:
                     logger.info(f"🌍 Timezone detected from hostname: {city} → {timezone}")
                     return timezone
+            
+            # Check for US regions in hostname
+            if '.us' in hostname or 'usa' in hostname or 'united-states' in hostname:
+                # Try to detect region from hostname
+                if 'east' in hostname or 'newyork' in hostname or 'virginia' in hostname:
+                    logger.info(f"🌍 Timezone detected from US East hostname → America/New_York")
+                    return 'America/New_York'
+                elif 'west' in hostname or 'losangeles' in hostname or 'california' in hostname:
+                    logger.info(f"🌍 Timezone detected from US West hostname → America/Los_Angeles")
+                    return 'America/Los_Angeles'
+                elif 'central' in hostname or 'chicago' in hostname or 'texas' in hostname:
+                    logger.info(f"🌍 Timezone detected from US Central hostname → America/Chicago")
+                    return 'America/Chicago'
         
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Reverse DNS failed: {e}")
         
-        # No timezone detected
+        # No timezone detected - return default based on common US proxy
         logger.warning(f"⚠️ Could not detect timezone for IP: {ip_address}")
-        return None
+        logger.info(f"💡 Defaulting to America/New_York (most common US timezone)")
+        return 'America/New_York'  # Safe default for US proxies
     
     def override_timezone_in_config(
         self,
