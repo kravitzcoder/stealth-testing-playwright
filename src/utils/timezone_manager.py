@@ -240,7 +240,7 @@ class TimezoneManager:
         # This is now mainly a fallback - IPResolver handles the main logic
         # Just return default for US proxies
         logger.debug(f"   Using default US timezone")
-        return 'America/New_York'
+        return 'America/Los_Angeles'
     
     def get_timezone_for_location(
         self,
@@ -318,7 +318,7 @@ class TimezoneManager:
         Returns:
             Updated configuration with corrected timezone
         """
-        original_timezone = config.get('timezone', 'America/New_York')
+        original_timezone = config.get('timezone', 'America/Los_Angeles')
         
         # If force_timezone is provided, use it
         if force_timezone:
