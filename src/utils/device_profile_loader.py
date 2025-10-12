@@ -306,7 +306,7 @@ class DeviceProfileLoader:
             'device_memory': device_memory,
             'language': csv_profile.get('language', 'en-US'),
             'languages': languages,
-            'timezone': csv_profile.get('timezone', 'America/New_York'),
+            'timezone': csv_profile.get('timezone', 'America/Los_Angeles'),
             'webgl_vendor': csv_profile.get('webgl_vendor', 'Apple Inc.'),
             'webgl_renderer': csv_profile.get('webgl_renderer', 'Apple GPU'),
             'os_version': csv_profile.get('os_version', '14.0'),
