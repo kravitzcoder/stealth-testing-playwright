@@ -87,7 +87,7 @@ class IPResolver:
             return ResolvedProxy(
                 hostname="none",
                 ip_address="",
-                timezone="America/Los_Angeles",
+                timezone="America/New_York",
                 resolution_method="no_proxy"
             )
         
@@ -199,8 +199,25 @@ class IPResolver:
             if geoip_record:
                 city = geoip_record.get('city', '')
                 country_code = geoip_record.get('country_code', '')
+                latitude = geoip_record.get('latitude')
+                longitude = geoip_record.get('longitude')
                 
-                # Try city-based timezone first
+                # 🆕 ENHANCED: Use lat/lon for US timezone detection
+                if country_code == 'US' and latitude and longitude:
+                    timezone = self._detect_us_timezone_from_coords(latitude, longitude)
+                    if timezone:
+                        geo_data = {
+                            'method': 'geoip_offline_latlon',
+                            'city': city.title() if city else None,
+                            'country': geoip_record.get('country_name'),
+                            'country_code': country_code,
+                            'latitude': latitude,
+                            'longitude': longitude,
+                        }
+                        logger.debug(f"   GeoIP (Lat/Lon): {latitude:.2f}, {longitude:.2f} → {timezone}")
+                        return timezone, geo_data
+                
+                # Try city-based timezone (fallback)
                 timezone = self.timezone_manager.get_timezone_for_location(
                     city=city,
                     country=country_code
@@ -212,8 +229,8 @@ class IPResolver:
                         'city': city.title() if city else None,
                         'country': geoip_record.get('country_name'),
                         'country_code': country_code,
-                        'latitude': geoip_record.get('latitude'),
-                        'longitude': geoip_record.get('longitude'),
+                        'latitude': latitude,
+                        'longitude': longitude,
                     }
                     logger.debug(f"   GeoIP: {city}, {country_code} → {timezone}")
                     return timezone, geo_data
@@ -276,7 +293,7 @@ class IPResolver:
             logger.debug(f"   Reverse DNS failed: {str(e)[:50]}")
         
         # Method 4: Default timezone (ultimate fallback)
-        default_timezone = "America/Los_Angeles"
+        default_timezone = "America/New_York"
         logger.warning(f"⚠️ Could not detect timezone for {ip_address}")
         logger.info(f"💡 Using default timezone: {default_timezone}")
         
@@ -293,6 +310,40 @@ class IPResolver:
             return len(parts) == 4 and all(0 <= p <= 255 for p in parts)
         except:
             return False
+    
+    def _detect_us_timezone_from_coords(self, latitude: float, longitude: float) -> Optional[str]:
+        """
+        Detect US timezone from latitude/longitude coordinates
+        
+        Uses approximate longitude boundaries for US timezones:
+        - Pacific: > -125 (West of -125°)
+        - Mountain: -125 to -104
+        - Central: -104 to -87  
+        - Eastern: < -87 (East of -87°)
+        
+        Args:
+            latitude: Latitude coordinate
+            longitude: Longitude coordinate
+        
+        Returns:
+            IANA timezone string or None
+        """
+        if not latitude or not longitude:
+            return None
+        
+        # US timezone boundaries (approximate)
+        if longitude > -104:  # West of -104° = Pacific/Mountain boundary
+            # Check if Mountain (Arizona, Colorado, Utah, etc.)
+            # Arizona (Phoenix area) doesn't observe DST
+            if 31 <= latitude <= 37 and -114.8 <= longitude <= -109:  # Arizona region
+                return 'America/Phoenix'  # No DST
+            return 'America/Los_Angeles'  # Pacific Time
+        
+        elif -104 >= longitude > -87:  # Central timezone
+            return 'America/Chicago'
+        
+        else:  # East of -87° = Eastern
+            return 'America/New_York'
     
     def get_cached_resolution(self, hostname: str) -> Optional[ResolvedProxy]:
         """
