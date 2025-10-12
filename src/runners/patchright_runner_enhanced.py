@@ -1,8 +1,7 @@
 """
-PATCHRIGHT RUNNER - BrowserForge Native WebRTC Implementation (CLEANED)
+PATCHRIGHT RUNNER - With Real IP-based Timezone Detection (FIXED)
 
-Uses BrowserForge's intelligent WebRTC handling + Patchright's browser patches
-NO custom WebRTC blocking - all handled by BrowserForge
+Now detects actual proxy IP and applies correct timezone
 """
 
 import logging
@@ -16,10 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class PatchrightRunnerEnhanced(BaseRunner):
-    """Patchright runner with browser patches + BrowserForge WebRTC"""
+    """Patchright runner with browser patches + BrowserForge + real IP timezone detection"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
+        self._detected_proxy_ip = None  # Cache detected IP
         logger.info("Patchright runner initialized (patches + BrowserForge WebRTC)")
     
     async def run_test(
@@ -30,7 +30,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Patchright's patches + BrowserForge WebRTC"""
+        """Run test with Patchright's patches + BrowserForge + Timezone correction"""
         start_time = time.time()
         logger.info(f"🎭 Testing Patchright (BrowserForge WebRTC) on {url_name}: {url}")
         
@@ -53,22 +53,24 @@ class PatchrightRunnerEnhanced(BaseRunner):
             async with async_playwright() as p:
                 proxy = self._build_proxy(proxy_config)
                 
-                # Extract proxy IP for WebRTC masking
-                proxy_ip = proxy_config.get("host") if proxy_config.get("host") else None
+                # Extract proxy host for WebRTC (may not be actual IP)
+                proxy_host = proxy_config.get("host") if proxy_config.get("host") else None
                 
-                # Get enhanced mobile config with BrowserForge + proxy IP
+                # Get enhanced mobile config (will use cached detected_ip if available)
                 enhanced_config = self.get_enhanced_mobile_config(
                     mobile_config=mobile_config,
                     device_type="iphone_x",
                     use_browserforge=True,
-                    proxy_ip=proxy_ip
+                    proxy_ip=proxy_host,
+                    detected_ip=self._detected_proxy_ip  # Use cached IP if we have it
                 )
                 
                 # Log enhancement status
                 if enhanced_config.get('_browserforge_enhanced'):
                     logger.info(f"🎭 BrowserForge fingerprint: {enhanced_config.get('device_name')}")
+                    logger.info(f"🕐 Timezone set to: {enhanced_config.get('timezone', 'Unknown')}")
                     if enhanced_config.get('_browserforge_webrtc_enabled'):
-                        logger.info(f"🔒 BrowserForge WebRTC protection enabled for proxy: {proxy_ip}")
+                        logger.info(f"🔒 BrowserForge WebRTC protection enabled")
                 else:
                     logger.info(f"📱 Using standard profile: {enhanced_config.get('device_name')}")
                 
@@ -84,7 +86,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                     ]
                 )
                 
-                # Enhanced mobile context
+                # Enhanced mobile context with timezone
                 context = await browser.new_context(
                     user_agent=enhanced_config.get("user_agent"),
                     viewport=enhanced_config.get("viewport"),
@@ -105,6 +107,20 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 logger.info(f"Navigating to {url}")
                 await page.goto(url, wait_until="networkidle", timeout=60000)
                 
+                # CRITICAL: Detect actual IP from page
+                proxy_working, detected_ip = await self._check_proxy(page, proxy_config)
+                
+                # If this is the first test and we detected an IP, cache it for future tests
+                if detected_ip and not self._detected_proxy_ip:
+                    self._detected_proxy_ip = detected_ip
+                    logger.info(f"🌍 Detected proxy IP: {detected_ip} (will use for timezone in future tests)")
+                    
+                    # Update timezone for this page if it's different
+                    corrected_timezone = self.timezone_manager.detect_timezone_from_ip(detected_ip)
+                    if corrected_timezone and corrected_timezone != enhanced_config.get('timezone'):
+                        logger.warning(f"⚠️ Timezone mismatch detected! Page has {enhanced_config.get('timezone')} but IP suggests {corrected_timezone}")
+                        logger.info(f"💡 Future tests will use correct timezone: {corrected_timezone}")
+                
                 # Extra wait for dynamic pages
                 await self._extra_wait_for_dynamic_pages(url, url_name)
                 
@@ -114,7 +130,6 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 )
                 
                 # Check results
-                proxy_working, detected_ip = await self._check_proxy(page, proxy_config)
                 is_mobile = await self._check_mobile_ua(page, enhanced_config)
                 
                 await browser.close()
@@ -139,7 +154,8 @@ class PatchrightRunnerEnhanced(BaseRunner):
                         'browserforge_webrtc': enhanced_config.get('_browserforge_webrtc_enabled', False),
                         'device_name': enhanced_config.get('device_name'),
                         'patchright_patches': True,
-                        'proxy_ip': proxy_ip
+                        'timezone': enhanced_config.get('timezone'),
+                        'proxy_ip': proxy_host
                     }
                 )
         
@@ -159,11 +175,8 @@ class PatchrightRunnerEnhanced(BaseRunner):
             )
     
     async def _apply_browserforge_stealth(self, context, enhanced_config: Dict[str, Any]):
-        """
-        Apply Patchright stealth + BrowserForge native WebRTC protection
+        """Apply Patchright stealth + BrowserForge native WebRTC protection"""
         
-        CLEANED: No custom WebRTC blocking - BrowserForge handles everything
-        """
         platform = enhanced_config.get("platform", "iPhone")
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
         device_memory = enhanced_config.get('device_memory', 4)
