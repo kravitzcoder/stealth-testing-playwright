@@ -1,11 +1,10 @@
 """
-CAMOUFOX RUNNER ENHANCED - JavaScript Relay Mode + BrowserForge
+CAMOUFOX RUNNER ENHANCED - BrowserForge Integration (CLEANED)
 
 WebRTC Strategy + BrowserForge:
-- NO Firefox preferences (they cause errors!)
-- ONLY JavaScript to force relay mode
-- Works in Firefox just like Chromium
-- BrowserForge intelligent fingerprints (NEW!)
+- NO custom WebRTC blocking or relay mode
+- BrowserForge handles ALL WebRTC masking
+- Works in Firefox with BrowserForge's native approach
 """
 
 import logging
@@ -19,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class CamoufoxRunnerEnhanced(BaseRunner):
-    """Camoufox runner with JavaScript relay mode + BrowserForge"""
+    """Camoufox runner with BrowserForge native WebRTC"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("Camoufox runner initialized (JS relay + BrowserForge)")
+        logger.info("Camoufox runner initialized (BrowserForge native)")
     
     async def run_test(
         self,
@@ -33,7 +32,7 @@ class CamoufoxRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Camoufox + JavaScript relay mode + BrowserForge"""
+        """Run test with Camoufox + BrowserForge native WebRTC"""
         start_time = time.time()
         logger.info(f"🎭 Testing Camoufox (BrowserForge) on {url_name}: {url}")
         
@@ -64,20 +63,26 @@ class CamoufoxRunnerEnhanced(BaseRunner):
                     proxy_dict["password"] = proxy_config["password"]
                 logger.info(f"Proxy: {proxy_dict['server']}")
             
-            # Get enhanced mobile config with BrowserForge (NEW!)
+            # Extract proxy IP for WebRTC masking
+            proxy_ip = proxy_config.get("host") if proxy_config.get("host") else None
+            
+            # Get enhanced mobile config with BrowserForge
             enhanced_config = self.get_enhanced_mobile_config(
                 mobile_config=mobile_config,
-                device_type="iphone_x",  # or extract from mobile_config
-                use_browserforge=True
+                device_type="iphone_x",
+                use_browserforge=True,
+                proxy_ip=proxy_ip
             )
             
             # Log enhancement status
             if enhanced_config.get('_browserforge_enhanced'):
                 logger.info(f"🎭 Using BrowserForge fingerprint: {enhanced_config.get('device_name')}")
+                if enhanced_config.get('_browserforge_webrtc_enabled'):
+                    logger.info(f"🔒 BrowserForge WebRTC protection enabled for proxy: {proxy_ip}")
             else:
                 logger.info(f"📱 Using standard profile: {enhanced_config.get('device_name')}")
             
-            # Camoufox WITHOUT any config (no Firefox prefs!)
+            # CLEANED: Camoufox WITHOUT any custom WebRTC configuration
             async with AsyncCamoufox(
                 headless=True,
                 proxy=proxy_dict,
@@ -91,8 +96,8 @@ class CamoufoxRunnerEnhanced(BaseRunner):
                 viewport = enhanced_config.get("viewport", {"width": 375, "height": 812})
                 await page.set_viewport_size(viewport)
                 
-                # Apply JavaScript relay mode + BrowserForge stealth
-                await self._apply_webrtc_relay_mode_with_browserforge(page, enhanced_config)
+                # Apply BrowserForge stealth (includes WebRTC)
+                await self._apply_browserforge_stealth(page, enhanced_config)
                 
                 logger.info(f"Navigating to {url} with Camoufox (BrowserForge)")
                 await page.goto(url, wait_until="networkidle", timeout=60000)
@@ -128,7 +133,9 @@ class CamoufoxRunnerEnhanced(BaseRunner):
                     execution_time=execution_time,
                     additional_data={
                         'browserforge_enhanced': enhanced_config.get('_browserforge_enhanced', False),
-                        'device_name': enhanced_config.get('device_name')
+                        'browserforge_webrtc': enhanced_config.get('_browserforge_webrtc_enabled', False),
+                        'device_name': enhanced_config.get('device_name'),
+                        'proxy_ip': proxy_ip
                     }
                 )
         
@@ -147,13 +154,11 @@ class CamoufoxRunnerEnhanced(BaseRunner):
                 execution_time=execution_time
             )
     
-    async def _apply_webrtc_relay_mode_with_browserforge(self, page, enhanced_config: Dict[str, Any]):
+    async def _apply_browserforge_stealth(self, page, enhanced_config: Dict[str, Any]):
         """
-        JavaScript WebRTC relay mode + BrowserForge stealth (works in Firefox!)
+        Apply BrowserForge stealth (CLEANED - no custom WebRTC code)
         
-        This combines:
-        - WebRTC relay-only mode
-        - BrowserForge fingerprint injection
+        BrowserForge handles ALL WebRTC masking natively
         """
         platform = enhanced_config.get('platform', 'iPhone')
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
@@ -162,9 +167,15 @@ class CamoufoxRunnerEnhanced(BaseRunner):
         webgl_renderer = enhanced_config.get('webgl_renderer', 'Apple GPU')
         language = enhanced_config.get('language', 'en-US')
         languages = enhanced_config.get('languages', ['en-US', 'en'])
+        max_touch_points = enhanced_config.get('max_touch_points', 5)
         
         # Convert languages list to JavaScript array
         languages_str = str(languages).replace("'", '"')
+        
+        # Get BrowserForge WebRTC script
+        webrtc_script = ""
+        if enhanced_config.get('_browserforge_webrtc_enabled'):
+            webrtc_script = self.browserforge.get_browserforge_webrtc_script(enhanced_config)
         
         script = f"""
 (function() {{
@@ -204,6 +215,14 @@ class CamoufoxRunnerEnhanced(BaseRunner):
         }});
     }} catch(e) {{}}
     
+    // BrowserForge: Max touch points
+    try {{
+        Object.defineProperty(navigator, 'maxTouchPoints', {{
+            get: () => {max_touch_points},
+            configurable: true
+        }});
+    }} catch(e) {{}}
+    
     // BrowserForge: Languages
     try {{
         Object.defineProperty(navigator, 'language', {{
@@ -236,30 +255,11 @@ class CamoufoxRunnerEnhanced(BaseRunner):
         }}
     }} catch(e) {{}}
     
-    // WebRTC: Force relay-only mode (uses proxy)
-    // This works in BOTH Firefox AND Chromium!
-    if (typeof RTCPeerConnection !== 'undefined') {{
-        const OriginalRTCPeerConnection = RTCPeerConnection;
-        
-        window.RTCPeerConnection = function(config) {{
-            // Force relay mode - uses proxy interface
-            if (config) {{
-                config.iceServers = config.iceServers || [];
-                config.iceTransportPolicy = 'relay';
-            }} else {{
-                config = {{ iceTransportPolicy: 'relay' }};
-            }}
-            
-            console.log('[Camoufox WebRTC] Relay mode enforced (proxy)');
-            return new OriginalRTCPeerConnection(config);
-        }};
-        
-        window.RTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
-    }}
-    
-    console.log('[Camoufox + BrowserForge] ✅ Enhanced stealth + WebRTC relay active');
+    console.log('[Camoufox + BrowserForge] ✅ Enhanced stealth applied');
 }})();
+
+{webrtc_script}
         """
         
         await page.evaluate(script)
-        logger.info("✅ Camoufox: BrowserForge stealth + WebRTC relay mode applied")
+        logger.info("✅ Camoufox: BrowserForge stealth + WebRTC protection applied")
