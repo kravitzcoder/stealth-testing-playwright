@@ -1,7 +1,9 @@
 """
-PLAYWRIGHT RUNNER - With IP Pre-Resolution + FIXED WebRTC Protection
+PLAYWRIGHT RUNNER - With IP Pre-Resolution + FIXED WebRTC + FIXED Geolocation
 
-CRITICAL FIX: WebRTC protection applied immediately after context creation
+CRITICAL FIXES:
+1. WebRTC protection applied immediately after context creation
+2. Geolocation API uses coordinates from resolved proxy IP (not hardcoded)
 """
 
 import logging
@@ -16,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class PlaywrightRunnerEnhanced(BaseRunner):
-    """Playwright runner with IP pre-resolution + FIXED WebRTC protection"""
+    """Playwright runner with IP pre-resolution + FIXED WebRTC + FIXED Geolocation"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("Playwright runner initialized (with IP pre-resolution + FIXED WebRTC)")
+        logger.info("Playwright runner initialized (with IP pre-resolution + FIXED WebRTC + FIXED Geolocation)")
     
     async def run_test(
         self,
@@ -30,9 +32,9 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Playwright + IP pre-resolution + FIXED WebRTC protection"""
+        """Run test with Playwright + IP pre-resolution + FIXED WebRTC + FIXED Geolocation"""
         start_time = time.time()
-        logger.info(f"🎭 Testing Playwright (IP Pre-Resolved + FIXED WebRTC) on {url_name}: {url}")
+        logger.info(f"🎭 Testing Playwright (IP Pre-Resolved + FIXED WebRTC + FIXED Geo) on {url_name}: {url}")
         
         try:
             from playwright.async_api import async_playwright
@@ -63,6 +65,8 @@ class PlaywrightRunnerEnhanced(BaseRunner):
             logger.info(f"   Timezone: {resolved_proxy.timezone}")
             if resolved_proxy.city:
                 logger.info(f"   Location: {resolved_proxy.city}, {resolved_proxy.country}")
+            if resolved_proxy.latitude and resolved_proxy.longitude:
+                logger.info(f"   Coordinates: {resolved_proxy.latitude:.4f}, {resolved_proxy.longitude:.4f}")
             logger.info(f"   Method: {resolved_proxy.resolution_method}")
             logger.info(f"   Time: {resolved_proxy.resolution_time_ms:.1f}ms")
             
@@ -86,7 +90,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
             
             # 🆕 STEP 3: Launch browser with CORRECT timezone from start
             logger.info("=" * 60)
-            logger.info("STEP 3: Launching browser with correct timezone...")
+            logger.info("STEP 3: Launching browser with correct timezone and geolocation...")
             logger.info("=" * 60)
             
             async with async_playwright() as p:
@@ -102,7 +106,17 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                     ]
                 )
                 
-                # 🔥 CRITICAL FIX: Create context with CORRECT timezone (pre-resolved)
+                # 🔥 CRITICAL FIX: Get coordinates from resolved proxy (not hardcoded!)
+                geo_lat = resolved_proxy.latitude if resolved_proxy.latitude else 34.0522342
+                geo_lon = resolved_proxy.longitude if resolved_proxy.longitude else -118.2436849
+                
+                logger.info(f"📍 Geolocation API coordinates: {geo_lat:.4f}, {geo_lon:.4f}")
+                if resolved_proxy.latitude and resolved_proxy.longitude:
+                    logger.info(f"   ✅ Using coordinates from proxy IP location")
+                else:
+                    logger.warning(f"   ⚠️ No coordinates from resolver, using fallback")
+                
+                # 🔥 CRITICAL FIX: Create context with CORRECT timezone AND coordinates
                 context = await browser.new_context(
                     user_agent=enhanced_config.get("user_agent"),
                     viewport=enhanced_config.get("viewport"),
@@ -112,10 +126,13 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                     locale=enhanced_config.get("language", "en-US").replace("_", "-"),
                     timezone_id=enhanced_config.get("timezone"),  # ✅ CORRECT from start!
                     permissions=['geolocation'],
-                    geolocation={"latitude": 37.7749, "longitude": -122.4194}
+                    geolocation={"latitude": geo_lat, "longitude": geo_lon}  # ✅ MATCHES PROXY IP!
                 )
                 
-                logger.info(f"✅ Browser context created with timezone: {enhanced_config.get('timezone')}")
+                logger.info(f"✅ Browser context created:")
+                logger.info(f"   Timezone: {enhanced_config.get('timezone')}")
+                logger.info(f"   Geolocation: {geo_lat:.4f}, {geo_lon:.4f}")
+                logger.info(f"   ✅ All location signals synchronized!")
                 
                 # 🔥 CRITICAL FIX: Apply WebRTC protection IMMEDIATELY after context creation
                 # This ensures the script runs BEFORE any page loads
@@ -184,7 +201,10 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                         'pre_resolved_timezone': resolved_proxy.timezone,
                         'timezone_method': resolved_proxy.resolution_method,
                         'ip_match': (detected_ip == resolved_proxy.ip_address) if detected_ip else None,
-                        'webrtc_protection_v2': True,  # 🆕 Indicates fixed version
+                        'webrtc_protection_v2': True,
+                        'geolocation_latitude': geo_lat,
+                        'geolocation_longitude': geo_lon,
+                        'geolocation_from_proxy': (resolved_proxy.latitude is not None),
                     }
                 )
         
@@ -280,7 +300,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         # WebRTC protection is now comprehensive and blocks STUN
         combined_script = f"""
 // ============================================================================
-// PLAYWRIGHT ENHANCED - FIXED WEBRTC PROTECTION v2.0
+// PLAYWRIGHT ENHANCED - FIXED WEBRTC + GEOLOCATION v3.0
 // ============================================================================
 
 // BrowserForge Injection (includes FIXED WebRTC masking with STUN blocking)
@@ -299,3 +319,4 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         logger.info("   - Private IP candidates blocked")
         logger.info("   - Fake candidates with proxy IP injected")
         logger.info("   - mDNS .local leaks prevented")
+        logger.info("   - Geolocation API synchronized with proxy location")
