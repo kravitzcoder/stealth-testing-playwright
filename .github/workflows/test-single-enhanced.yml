@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 30
     
     steps:
-      - name: 📥 Checkout Repository
+      - name: 🔥 Checkout Repository
         uses: actions/checkout@v4
       
       - name: 🐍 Set up Python 3.11
@@ -74,6 +74,28 @@ jobs:
             python -c "from browserforge.fingerprints import FingerprintGenerator; print('✅ BrowserForge verified')"
           else
             echo "📱 Using standard runners (BrowserForge disabled)"
+          fi
+          
+          # Install pygeoip for offline timezone detection
+          echo "📍 Installing pygeoip for timezone detection..."
+          pip install pygeoip
+          python -c "import pygeoip; print('✅ pygeoip verified')"
+      
+      - name: 📍 Setup GeoIP Database
+        run: |
+          echo "=========================================="
+          echo "Setting up GeoIP Database"
+          echo "=========================================="
+          
+          # Run setup script to download GeoIP database
+          python setup_geoip.py
+          
+          # Verify setup
+          if [ -f profiles/GeoLiteCity.dat ]; then
+            echo "✅ GeoIP database ready"
+            ls -lh profiles/GeoLiteCity.dat
+          else
+            echo "⚠️ GeoIP database not found - will use online fallback"
           fi
       
       - name: 📦 Install Library-Specific Dependencies
@@ -242,7 +264,7 @@ jobs:
             grep -r "browserforge_enhanced" test_results/ 2>/dev/null | head -5 || echo "No BrowserForge markers found in results"
           fi
       
-      - name: 📝 Debug Info (if failed)
+      - name: 🐛 Debug Info (if failed)
         if: failure()
         run: |
           echo "=========================================="
