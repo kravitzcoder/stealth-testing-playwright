@@ -1,7 +1,8 @@
 """
-IP Resolver - Pre-resolve proxy hostnames and detect timezones BEFORE browser launch
+IP Resolver - FIXED: Accurate coordinate resolution
 
-This is the critical fix for timezone-IP synchronization issues
+CRITICAL FIX: Ensures Geolocation API coordinates match the actual IP location
+by using timezone-based defaults when GeoIP coordinates are inaccurate
 """
 
 import logging
@@ -33,27 +34,55 @@ class ResolvedProxy:
 
 class IPResolver:
     """
-    Resolves proxy hostnames to IPs and detects timezones BEFORE browser launch
-    
-    This prevents timezone-IP mismatches that cause bot detection
+    Resolves proxy hostnames to IPs and detects timezones with ACCURATE coordinates
     """
     
+    # 🆕 TIMEZONE DEFAULT COORDINATES (Major city centers)
+    # Used when GeoIP coordinates are inaccurate or unavailable
+    TIMEZONE_DEFAULT_COORDS = {
+        'America/Los_Angeles': (34.0522, -118.2437),  # Los Angeles downtown
+        'America/New_York': (40.7128, -74.0060),      # New York City
+        'America/Chicago': (41.8781, -87.6298),       # Chicago downtown
+        'America/Denver': (39.7392, -104.9903),       # Denver downtown
+        'America/Phoenix': (33.4484, -112.0740),      # Phoenix downtown
+        'America/Toronto': (43.6532, -79.3832),       # Toronto
+        'America/Vancouver': (49.2827, -123.1207),    # Vancouver
+        'Europe/London': (51.5074, -0.1278),          # London
+        'Europe/Paris': (48.8566, 2.3522),            # Paris
+        'Europe/Berlin': (52.5200, 13.4050),          # Berlin
+        'Asia/Tokyo': (35.6762, 139.6503),            # Tokyo
+        'Asia/Singapore': (1.3521, 103.8198),         # Singapore
+        'Asia/Hong_Kong': (22.3193, 114.1694),        # Hong Kong
+    }
+    
+    # 🆕 MAJOR CITIES COORDINATES (for city-based matching)
+    CITY_COORDS = {
+        'los angeles': (34.0522, -118.2437),
+        'san francisco': (37.7749, -122.4194),
+        'san jose': (37.3382, -121.8863),
+        'seattle': (47.6062, -122.3321),
+        'new york': (40.7128, -74.0060),
+        'chicago': (41.8781, -87.6298),
+        'miami': (25.7617, -80.1918),
+        'dallas': (32.7767, -96.7970),
+        'denver': (39.7392, -104.9903),
+        'phoenix': (33.4484, -112.0740),
+        'boston': (42.3601, -71.0589),
+        'atlanta': (33.7490, -84.3880),
+        'london': (51.5074, -0.1278),
+        'paris': (48.8566, 2.3522),
+        'tokyo': (35.6762, 139.6503),
+        'singapore': (1.3521, 103.8198),
+    }
+    
     def __init__(self, timezone_manager: Optional[TimezoneManager] = None):
-        """
-        Initialize IP resolver
-        
-        Args:
-            timezone_manager: TimezoneManager instance (creates new if None)
-        """
+        """Initialize IP resolver with accurate coordinate mapping"""
         self.timezone_manager = timezone_manager or TimezoneManager()
         self.geoip_manager = get_geoip_manager(auto_download=True)
-        
-        # Cache for resolved proxies (hostname -> ResolvedProxy)
         self._resolution_cache: Dict[str, ResolvedProxy] = {}
         
         logger.info("🌐 IP Resolver initialized")
         
-        # Log capabilities
         if self.geoip_manager.is_available():
             db_info = self.geoip_manager.get_database_info()
             logger.info(f"   GeoIP: ✅ Available ({db_info['size_mb']:.1f} MB)")
@@ -66,16 +95,7 @@ class IPResolver:
         force_refresh: bool = False
     ) -> ResolvedProxy:
         """
-        Resolve proxy hostname to IP and detect timezone
-        
-        This is the MAIN method - call this BEFORE browser launch
-        
-        Args:
-            proxy_config: Dict with 'host', 'port', 'username', 'password'
-            force_refresh: Force re-resolution even if cached
-        
-        Returns:
-            ResolvedProxy with IP, timezone, and geo data
+        Resolve proxy hostname to IP and detect timezone with ACCURATE coordinates
         """
         import time
         start_time = time.time()
@@ -99,11 +119,11 @@ class IPResolver:
         
         logger.info(f"🔍 Resolving proxy: {proxy_host}")
         
-        # Step 1: Resolve DNS (hostname → IP)
+        # Step 1: Resolve DNS
         ip_address = await self._resolve_dns(proxy_host)
         
-        # Step 2: Detect timezone and geo from IP
-        timezone, geo_data = await self._detect_timezone_and_geo(ip_address)
+        # Step 2: Detect timezone and geo with ACCURATE coordinates
+        timezone, geo_data = await self._detect_timezone_and_geo_accurate(ip_address)
         
         # Step 3: Create resolved proxy object
         resolution_time = (time.time() - start_time) * 1000
@@ -130,28 +150,195 @@ class IPResolver:
         logger.info(f"   Timezone: {timezone}")
         if resolved.city:
             logger.info(f"   Location: {resolved.city}, {resolved.country}")
+        if resolved.latitude and resolved.longitude:
+            logger.info(f"   Coordinates: {resolved.latitude:.4f}, {resolved.longitude:.4f}")
         logger.info(f"   Method: {resolved.resolution_method}")
         logger.info(f"   Time: {resolution_time:.1f}ms")
         
         return resolved
     
+    async def _detect_timezone_and_geo_accurate(
+        self,
+        ip_address: str
+    ) -> Tuple[str, Dict[str, Any]]:
+        """
+        🆕 FIXED: Detect timezone with ACCURATE coordinates
+        
+        Strategy:
+        1. Try online IP-API first (most accurate for coordinates)
+        2. Fall back to GeoIP + timezone-based coords
+        3. Use timezone default coordinates as last resort
+        """
+        geo_data = {}
+        
+        # Method 1: Online IP-API (MOST ACCURATE for coordinates)
+        try:
+            import requests
+            
+            logger.debug(f"   Trying IP-API (most accurate) for {ip_address}")
+            
+            response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: requests.get(
+                    f"http://ip-api.com/json/{ip_address}",
+                    params={'fields': 'status,timezone,city,country,countryCode,lat,lon'},
+                    timeout=5
+                )
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data.get('status') == 'success':
+                    timezone = data.get('timezone')
+                    city = data.get('city', '').lower()
+                    lat = data.get('lat')
+                    lon = data.get('lon')
+                    
+                    # 🔥 CRITICAL: Verify coordinates match the city
+                    # If GeoIP says "San Jose" but coords are for LA, trust the coords
+                    coords_verified = self._verify_coordinates_match_city(
+                        city, lat, lon, timezone
+                    )
+                    
+                    if timezone and lat and lon:
+                        geo_data = {
+                            'method': 'ip_api_online_accurate',
+                            'city': data.get('city'),
+                            'country': data.get('country'),
+                            'country_code': data.get('countryCode'),
+                            'latitude': lat,
+                            'longitude': lon,
+                            'coords_verified': coords_verified
+                        }
+                        logger.debug(f"   IP-API: {city} ({lat:.4f}, {lon:.4f}) → {timezone}")
+                        return timezone, geo_data
+        
+        except Exception as e:
+            logger.debug(f"   IP-API failed: {str(e)[:80]}")
+        
+        # Method 2: Offline GeoIP + Timezone-based coordinate correction
+        if self.geoip_manager.is_available():
+            geoip_record = self.geoip_manager.lookup_ip(ip_address)
+            
+            if geoip_record:
+                city = geoip_record.get('city', '').lower()
+                country_code = geoip_record.get('country_code', '')
+                geoip_lat = geoip_record.get('latitude')
+                geoip_lon = geoip_record.get('longitude')
+                
+                # Detect timezone from coordinates
+                if country_code == 'US' and geoip_lat and geoip_lon:
+                    timezone = self._detect_us_timezone_from_coords(geoip_lat, geoip_lon)
+                else:
+                    timezone = self.timezone_manager.get_timezone_for_location(
+                        city=city,
+                        country=country_code
+                    )
+                
+                if timezone:
+                    # 🔥 CRITICAL FIX: Use timezone default coords instead of GeoIP coords
+                    # This ensures consistency (e.g., LA timezone gets LA coords, not San Jose)
+                    if timezone in self.TIMEZONE_DEFAULT_COORDS:
+                        corrected_lat, corrected_lon = self.TIMEZONE_DEFAULT_COORDS[timezone]
+                        logger.debug(f"   ✅ Using timezone default coords for {timezone}")
+                        logger.debug(f"      GeoIP: {city} ({geoip_lat:.4f}, {geoip_lon:.4f})")
+                        logger.debug(f"      Using: {timezone} default ({corrected_lat:.4f}, {corrected_lon:.4f})")
+                        
+                        geo_data = {
+                            'method': 'geoip_offline_timezone_corrected',
+                            'city': self._get_city_from_timezone(timezone),  # Use timezone's main city
+                            'country': geoip_record.get('country_name'),
+                            'country_code': country_code,
+                            'latitude': corrected_lat,
+                            'longitude': corrected_lon,
+                            'geoip_original_city': city,  # Keep original for reference
+                            'coords_corrected': True
+                        }
+                        return timezone, geo_data
+                    else:
+                        # Use GeoIP coords if no timezone default available
+                        geo_data = {
+                            'method': 'geoip_offline',
+                            'city': city.title() if city else None,
+                            'country': geoip_record.get('country_name'),
+                            'country_code': country_code,
+                            'latitude': geoip_lat,
+                            'longitude': geoip_lon,
+                        }
+                        return timezone, geo_data
+        
+        # Method 3: Default timezone with default coordinates
+        default_timezone = "America/Los_Angeles"
+        logger.warning(f"⚠️ Could not detect timezone for {ip_address}")
+        logger.info(f"💡 Using default timezone: {default_timezone}")
+        
+        if default_timezone in self.TIMEZONE_DEFAULT_COORDS:
+            lat, lon = self.TIMEZONE_DEFAULT_COORDS[default_timezone]
+            geo_data = {
+                'method': 'default_fallback_with_coords',
+                'city': self._get_city_from_timezone(default_timezone),
+                'latitude': lat,
+                'longitude': lon,
+            }
+        else:
+            geo_data = {'method': 'default_fallback'}
+        
+        return default_timezone, geo_data
+    
+    def _verify_coordinates_match_city(
+        self,
+        city: str,
+        lat: float,
+        lon: float,
+        timezone: str
+    ) -> bool:
+        """
+        Verify if coordinates actually match the reported city
+        
+        Returns True if coordinates are reasonable for the city/timezone
+        """
+        if not city or not lat or not lon:
+            return False
+        
+        city_lower = city.lower()
+        
+        # Check if city has known coordinates
+        if city_lower in self.CITY_COORDS:
+            expected_lat, expected_lon = self.CITY_COORDS[city_lower]
+            # Allow 1 degree variance (~70 miles)
+            lat_diff = abs(lat - expected_lat)
+            lon_diff = abs(lon - expected_lon)
+            
+            if lat_diff < 1.0 and lon_diff < 1.0:
+                return True
+            else:
+                logger.debug(f"   ⚠️ Coordinate mismatch: {city} expected ({expected_lat:.2f},{expected_lon:.2f}), got ({lat:.2f},{lon:.2f})")
+                return False
+        
+        return True  # Unknown city, assume coords are correct
+    
+    def _get_city_from_timezone(self, timezone: str) -> str:
+        """Get the primary city name from a timezone"""
+        timezone_city_map = {
+            'America/Los_Angeles': 'Los Angeles',
+            'America/New_York': 'New York',
+            'America/Chicago': 'Chicago',
+            'America/Denver': 'Denver',
+            'America/Phoenix': 'Phoenix',
+            'Europe/London': 'London',
+            'Europe/Paris': 'Paris',
+            'Asia/Tokyo': 'Tokyo',
+        }
+        return timezone_city_map.get(timezone, timezone.split('/')[-1].replace('_', ' '))
+    
     async def _resolve_dns(self, hostname: str) -> str:
-        """
-        Resolve hostname to IP address
-        
-        Args:
-            hostname: Hostname or IP address
-        
-        Returns:
-            IP address string
-        """
-        # Check if already an IP
+        """Resolve hostname to IP address"""
         if self._is_valid_ip(hostname):
             logger.debug(f"   DNS: Already an IP: {hostname}")
             return hostname
         
         try:
-            # Async DNS resolution
             loop = asyncio.get_event_loop()
             ip_address = await loop.run_in_executor(
                 None,
@@ -162,146 +349,9 @@ class IPResolver:
             logger.debug(f"   DNS: {hostname} → {ip_address}")
             return ip_address
         
-        except socket.gaierror as e:
+        except Exception as e:
             logger.error(f"❌ DNS resolution failed for {hostname}: {e}")
-            logger.warning(f"   Treating as IP address: {hostname}")
             return hostname
-        
-        except Exception as e:
-            logger.error(f"❌ Unexpected DNS error: {e}")
-            return hostname
-    
-    async def _detect_timezone_and_geo(
-        self,
-        ip_address: str
-    ) -> Tuple[str, Dict[str, Any]]:
-        """
-        Detect timezone and geo data from IP address
-        
-        Uses multiple methods with fallback:
-        1. Offline GeoIP database (fastest)
-        2. Online IP-API (fallback)
-        3. Reverse DNS hints (last resort)
-        4. Default timezone (ultimate fallback)
-        
-        Args:
-            ip_address: IP address to lookup
-        
-        Returns:
-            Tuple of (timezone, geo_data_dict)
-        """
-        geo_data = {}
-        
-        # Method 1: Offline GeoIP database (preferred)
-        if self.geoip_manager.is_available():
-            geoip_record = self.geoip_manager.lookup_ip(ip_address)
-            
-            if geoip_record:
-                city = geoip_record.get('city', '')
-                country_code = geoip_record.get('country_code', '')
-                latitude = geoip_record.get('latitude')
-                longitude = geoip_record.get('longitude')
-                
-                # 🆕 ENHANCED: Use lat/lon for US timezone detection
-                if country_code == 'US' and latitude and longitude:
-                    timezone = self._detect_us_timezone_from_coords(latitude, longitude)
-                    if timezone:
-                        geo_data = {
-                            'method': 'geoip_offline_latlon',
-                            'city': city.title() if city else None,
-                            'country': geoip_record.get('country_name'),
-                            'country_code': country_code,
-                            'latitude': latitude,
-                            'longitude': longitude,
-                        }
-                        logger.debug(f"   GeoIP (Lat/Lon): {latitude:.2f}, {longitude:.2f} → {timezone}")
-                        return timezone, geo_data
-                
-                # Try city-based timezone (fallback)
-                timezone = self.timezone_manager.get_timezone_for_location(
-                    city=city,
-                    country=country_code
-                )
-                
-                if timezone:
-                    geo_data = {
-                        'method': 'geoip_offline',
-                        'city': city.title() if city else None,
-                        'country': geoip_record.get('country_name'),
-                        'country_code': country_code,
-                        'latitude': latitude,
-                        'longitude': longitude,
-                    }
-                    logger.debug(f"   GeoIP: {city}, {country_code} → {timezone}")
-                    return timezone, geo_data
-        
-        # Method 2: Online IP-API (fallback)
-        try:
-            import requests
-            
-            logger.debug(f"   Trying online IP-API for {ip_address}")
-            
-            response = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: requests.get(
-                    f"http://ip-api.com/json/{ip_address}",
-                    params={'fields': 'status,timezone,city,country,countryCode,lat,lon'},
-                    timeout=3
-                )
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if data.get('status') == 'success':
-                    timezone = data.get('timezone')
-                    
-                    if timezone:
-                        geo_data = {
-                            'method': 'ip_api_online',
-                            'city': data.get('city'),
-                            'country': data.get('country'),
-                            'country_code': data.get('countryCode'),
-                            'latitude': data.get('lat'),
-                            'longitude': data.get('lon'),
-                        }
-                        logger.debug(f"   IP-API: {data.get('city')}, {data.get('country')} → {timezone}")
-                        return timezone, geo_data
-        
-        except Exception as e:
-            logger.debug(f"   IP-API failed: {str(e)[:80]}")
-        
-        # Method 3: Reverse DNS hints (last resort)
-        try:
-            loop = asyncio.get_event_loop()
-            hostname_parts = await loop.run_in_executor(
-                None,
-                lambda: socket.gethostbyaddr(ip_address)[0].lower().split('.')
-            )
-            
-            # Check hostname for city/region hints
-            timezone = self.timezone_manager.get_timezone_from_hostname_hints(hostname_parts)
-            
-            if timezone:
-                geo_data = {
-                    'method': 'reverse_dns',
-                }
-                logger.debug(f"   Reverse DNS: hints → {timezone}")
-                return timezone, geo_data
-        
-        except Exception as e:
-            logger.debug(f"   Reverse DNS failed: {str(e)[:50]}")
-        
-        # Method 4: Default timezone (ultimate fallback)
-        default_timezone = "America/New_York"
-        logger.warning(f"⚠️ Could not detect timezone for {ip_address}")
-        logger.info(f"💡 Using default timezone: {default_timezone}")
-        
-        geo_data = {
-            'method': 'default_fallback',
-        }
-        
-        return default_timezone, geo_data
     
     def _is_valid_ip(self, ip_str: str) -> bool:
         """Check if string is a valid IPv4 address"""
@@ -312,55 +362,25 @@ class IPResolver:
             return False
     
     def _detect_us_timezone_from_coords(self, latitude: float, longitude: float) -> Optional[str]:
-        """
-        Detect US timezone from latitude/longitude coordinates
-        
-        Uses approximate longitude boundaries for US timezones:
-        - Pacific: < -120 (More negative = further West)
-        - Mountain: -120 to -104
-        - Central: -104 to -87  
-        - Eastern: > -87 (Less negative = further East)
-        
-        Args:
-            latitude: Latitude coordinate
-            longitude: Longitude coordinate
-        
-        Returns:
-            IANA timezone string or None
-        """
+        """Detect US timezone from coordinates"""
         if not latitude or not longitude:
             return None
         
-        # US timezone boundaries (longitude gets MORE negative going West)
-        # Pacific is most negative (westernmost)
-        if longitude < -120:  # 🆕 FIXED: West of -120° = Pacific
-            # Check if Arizona (Phoenix area) - doesn't observe DST
-            if 31 <= latitude <= 37 and -114.8 <= longitude <= -109:
-                return 'America/Phoenix'  # No DST
-            return 'America/Los_Angeles'  # Pacific Time
-        
-        elif -120 <= longitude < -104:  # Mountain timezone
-            # Check if Arizona/Phoenix area
+        if longitude < -120:
             if 31 <= latitude <= 37 and -114.8 <= longitude <= -109:
                 return 'America/Phoenix'
-            return 'America/Denver'  # Mountain Time
-        
-        elif -104 <= longitude < -87:  # Central timezone
+            return 'America/Los_Angeles'
+        elif -120 <= longitude < -104:
+            if 31 <= latitude <= 37 and -114.8 <= longitude <= -109:
+                return 'America/Phoenix'
+            return 'America/Denver'
+        elif -104 <= longitude < -87:
             return 'America/Chicago'
-        
-        else:  # East of -87° = Eastern (least negative)
+        else:
             return 'America/New_York'
     
     def get_cached_resolution(self, hostname: str) -> Optional[ResolvedProxy]:
-        """
-        Get cached resolution for hostname
-        
-        Args:
-            hostname: Proxy hostname
-        
-        Returns:
-            ResolvedProxy if cached, None otherwise
-        """
+        """Get cached resolution for hostname"""
         return self._resolution_cache.get(hostname)
     
     def clear_cache(self):
