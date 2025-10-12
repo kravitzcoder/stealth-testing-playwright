@@ -1,11 +1,11 @@
 """
-REBROWSER RUNNER ENHANCED - With CDP WebRTC Control + BrowserForge
+REBROWSER RUNNER ENHANCED - BrowserForge Native WebRTC (CLEANED)
 
-WebRTC Strategy + BrowserForge:
-- Browser flags to force proxy interface
-- JavaScript relay-only mode
-- CDP network commands to block STUN/TURN (MOST ROBUST!)
-- BrowserForge intelligent fingerprints (NEW!)
+WebRTC Strategy:
+- NO custom WebRTC blocking or relay mode
+- NO CDP STUN/TURN blocking
+- BrowserForge handles ALL WebRTC masking natively
+- Uses Rebrowser's stealth patches + BrowserForge fingerprints
 """
 
 import logging
@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 class RebrowserRunnerEnhanced(BaseRunner):
-    """Rebrowser runner with full CDP WebRTC control + BrowserForge"""
+    """Rebrowser runner with BrowserForge native WebRTC"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("🔥 Rebrowser runner initialized (CDP WebRTC + BrowserForge)")
+        logger.info("🔥 Rebrowser runner initialized (BrowserForge native)")
     
     async def run_test(
         self,
@@ -34,7 +34,7 @@ class RebrowserRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Rebrowser's full CDP WebRTC control + BrowserForge"""
+        """Run test with Rebrowser + BrowserForge native WebRTC"""
         start_time = time.time()
         logger.info(f"🎭 Testing Rebrowser (BrowserForge) on {url_name}: {url}")
         
@@ -57,25 +57,31 @@ class RebrowserRunnerEnhanced(BaseRunner):
             async with async_playwright() as p:
                 proxy = self._build_proxy(proxy_config)
                 
-                # Get enhanced mobile config with BrowserForge (NEW!)
+                # Extract proxy IP for WebRTC masking
+                proxy_ip = proxy_config.get("host") if proxy_config.get("host") else None
+                
+                # Get enhanced mobile config with BrowserForge
                 enhanced_config = self.get_enhanced_mobile_config(
                     mobile_config=mobile_config,
-                    device_type="iphone_x",  # or extract from mobile_config
-                    use_browserforge=True
+                    device_type="iphone_x",
+                    use_browserforge=True,
+                    proxy_ip=proxy_ip
                 )
                 
                 # Log enhancement status
                 if enhanced_config.get('_browserforge_enhanced'):
                     logger.info(f"🎭 Using BrowserForge fingerprint: {enhanced_config.get('device_name')}")
                     logger.info(f"   User-Agent: {enhanced_config['user_agent'][:60]}...")
+                    if enhanced_config.get('_browserforge_webrtc_enabled'):
+                        logger.info(f"🔒 BrowserForge WebRTC protection enabled for proxy: {proxy_ip}")
                 else:
                     logger.info(f"📱 Using standard profile: {enhanced_config.get('device_name')}")
                 
-                # Rebrowser launch args with WebRTC flags
+                # CLEANED: Rebrowser launch args WITHOUT WebRTC flags
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
-                    args=self._get_rebrowser_launch_args_with_webrtc()
+                    args=self._get_rebrowser_launch_args_clean()
                 )
                 
                 # Enhanced context with BrowserForge data
@@ -83,18 +89,16 @@ class RebrowserRunnerEnhanced(BaseRunner):
                     **self._get_rebrowser_context_config(enhanced_config)
                 )
                 
-                # Apply Rebrowser stealth + BrowserForge
+                # Apply Rebrowser stealth + BrowserForge (no custom WebRTC)
                 await self._apply_rebrowser_stealth_with_browserforge(context, enhanced_config)
                 
                 page = await context.new_page()
                 
-                # CRITICAL: CDP WebRTC control (most robust!)
-                await self._apply_cdp_webrtc_control(page, proxy_config)
+                # CLEANED: No CDP WebRTC blocking - let BrowserForge handle it
+                # Optionally apply minimal CDP stealth (geolocation, timezone, touch)
+                await self._apply_cdp_stealth_minimal(page, enhanced_config)
                 
-                # Apply other CDP stealth with BrowserForge
-                await self._apply_cdp_stealth_with_browserforge(page, enhanced_config)
-                
-                logger.info(f"Navigating to {url} with Rebrowser (CDP + BrowserForge)")
+                logger.info(f"Navigating to {url} with Rebrowser (BrowserForge)")
                 await page.goto(url, wait_until="networkidle", timeout=60000)
                 
                 # Extra wait for dynamic pages
@@ -128,7 +132,9 @@ class RebrowserRunnerEnhanced(BaseRunner):
                     execution_time=execution_time,
                     additional_data={
                         'browserforge_enhanced': enhanced_config.get('_browserforge_enhanced', False),
-                        'device_name': enhanced_config.get('device_name')
+                        'browserforge_webrtc': enhanced_config.get('_browserforge_webrtc_enabled', False),
+                        'device_name': enhanced_config.get('device_name'),
+                        'proxy_ip': proxy_ip
                     }
                 )
         
@@ -147,17 +153,17 @@ class RebrowserRunnerEnhanced(BaseRunner):
                 execution_time=execution_time
             )
     
-    def _get_rebrowser_launch_args_with_webrtc(self) -> list:
-        """Rebrowser launch args with WebRTC flags"""
+    def _get_rebrowser_launch_args_clean(self) -> list:
+        """
+        CLEANED: Rebrowser launch args WITHOUT WebRTC blocking
+        
+        Let BrowserForge handle WebRTC natively
+        """
         return [
             # Core anti-detection
             '--disable-blink-features=AutomationControlled',
             '--disable-features=IsolateOrigins,site-per-process',
             '--disable-site-isolation-trials',
-            
-            # WebRTC flags (CRITICAL!)
-            '--force-webrtc-ip-handling-policy=default_public_interface_only',
-            '--enforce-webrtc-ip-permission-check',
             
             # Environment
             '--no-sandbox',
@@ -171,6 +177,8 @@ class RebrowserRunnerEnhanced(BaseRunner):
             # Automation markers removal
             '--disable-automation',
             '--disable-dev-tools',
+            
+            # ✅ NO WebRTC-disabling flags - BrowserForge handles it!
         ]
     
     def _get_rebrowser_context_config(self, enhanced_config: Dict[str, Any]) -> dict:
@@ -199,34 +207,12 @@ class RebrowserRunnerEnhanced(BaseRunner):
             'geolocation': {"latitude": 37.7749, "longitude": -122.4194}
         }
     
-    async def _apply_cdp_webrtc_control(self, page, proxy_config: Dict[str, str]):
-        """
-        CDP WebRTC control (Rebrowser's secret weapon!)
-        
-        This blocks STUN/TURN at network level
-        Most robust WebRTC protection available
-        """
-        try:
-            client = await page.context.new_cdp_session(page)
-            
-            # Block STUN/TURN servers at network level
-            await client.send('Network.setBlockedURLs', {
-                'urls': [
-                    '*://stun.*',
-                    '*://turn.*',
-                    '*:3478/*',  # STUN/TURN port
-                    '*:5349/*',  # STUN/TURN TLS port
-                ]
-            })
-            
-            logger.info("✅ CDP: STUN/TURN servers blocked (network level)")
-            logger.info("🔥 Rebrowser advantage: Network-level WebRTC control")
-            
-        except Exception as e:
-            logger.warning(f"⚠️ CDP WebRTC control partial: {str(e)[:100]}")
-    
     async def _apply_rebrowser_stealth_with_browserforge(self, context, enhanced_config: Dict[str, Any]):
-        """Rebrowser stealth + WebRTC relay + BrowserForge"""
+        """
+        CLEANED: Rebrowser stealth + BrowserForge (NO custom WebRTC)
+        
+        BrowserForge handles ALL WebRTC masking
+        """
         ua = enhanced_config.get("user_agent", "")
         platform = enhanced_config.get("platform", "iPhone")
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
@@ -239,6 +225,11 @@ class RebrowserRunnerEnhanced(BaseRunner):
         
         ua_escaped = json.dumps(ua)
         languages_str = str(languages).replace("'", '"')
+        
+        # Get BrowserForge WebRTC script
+        webrtc_script = ""
+        if enhanced_config.get('_browserforge_webrtc_enabled'):
+            webrtc_script = self.browserforge.get_browserforge_webrtc_script(enhanced_config)
         
         script = f"""
 (function() {{
@@ -276,26 +267,6 @@ class RebrowserRunnerEnhanced(BaseRunner):
         configurable: true
     }});
     
-    // WebRTC: Force relay-only mode (uses proxy)
-    if (typeof RTCPeerConnection !== 'undefined') {{
-        const OriginalRTCPeerConnection = RTCPeerConnection;
-        
-        window.RTCPeerConnection = function(config) {{
-            // Force relay mode
-            if (config) {{
-                config.iceServers = config.iceServers || [];
-                config.iceTransportPolicy = 'relay';
-            }} else {{
-                config = {{ iceTransportPolicy: 'relay' }};
-            }}
-            
-            console.log('[Rebrowser WebRTC] Relay mode + CDP blocking active');
-            return new OriginalRTCPeerConnection(config);
-        }};
-        
-        window.RTCPeerConnection.prototype = OriginalRTCPeerConnection.prototype;
-    }}
-    
     // BrowserForge: WebGL vendor/renderer spoofing
     const getParameter = WebGLRenderingContext.prototype.getParameter;
     WebGLRenderingContext.prototype.getParameter = function(parameter) {{
@@ -313,34 +284,53 @@ class RebrowserRunnerEnhanced(BaseRunner):
         }};
     }}
     
-    console.log('[Rebrowser + BrowserForge] ✅ Stealth + WebRTC + CDP + fingerprints active');
+    // Chrome runtime
+    if (!window.chrome) {{
+        window.chrome = {{}};
+    }}
+    window.chrome.runtime = {{
+        connect: () => ({{}}),
+        sendMessage: () => ({{}})
+    }};
+    
+    console.log('[Rebrowser + BrowserForge] ✅ Stealth + fingerprints active');
 }})();
+
+{webrtc_script}
         """
         
         await context.add_init_script(script)
-        logger.info("✅ Rebrowser: Enhanced stealth + BrowserForge + WebRTC relay applied")
+        logger.info("✅ Rebrowser: Enhanced stealth + BrowserForge + WebRTC protection applied")
     
-    async def _apply_cdp_stealth_with_browserforge(self, page, enhanced_config: Dict[str, Any]):
-        """CDP commands for additional stealth with BrowserForge data"""
+    async def _apply_cdp_stealth_minimal(self, page, enhanced_config: Dict[str, Any]):
+        """
+        CLEANED: Minimal CDP commands (NO WebRTC blocking)
+        
+        Only applies geolocation, timezone, and touch emulation
+        BrowserForge handles WebRTC
+        """
         try:
             client = await page.context.new_cdp_session(page)
             
+            # Geolocation override
             await client.send('Emulation.setGeolocationOverride', {
                 'latitude': 37.7749,
                 'longitude': -122.4194,
                 'accuracy': 100
             })
             
+            # Timezone override
             await client.send('Emulation.setTimezoneOverride', {
                 'timezoneId': enhanced_config.get("timezone", "America/New_York")
             })
             
+            # Touch emulation
             await client.send('Emulation.setTouchEmulationEnabled', {
                 'enabled': True,
                 'maxTouchPoints': enhanced_config.get("max_touch_points", 5)
             })
             
-            logger.info("✅ CDP: Geolocation, timezone, touch emulation applied (BrowserForge values)")
+            logger.info("✅ CDP: Geolocation, timezone, touch emulation applied (BrowserForge handles WebRTC)")
             
         except Exception as e:
             logger.warning(f"⚠️ CDP stealth partial: {str(e)[:80]}")
