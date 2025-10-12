@@ -235,7 +235,7 @@ class BrowserForgeManager:
     'use strict';
     
     const PROXY_IP = '{proxy_ip}';
-    const DEBUG = false;
+    const DEBUG = true;
     
     if (DEBUG) console.log('[WebRTC Balanced] Initializing proxy IP injection for:', PROXY_IP);
     
