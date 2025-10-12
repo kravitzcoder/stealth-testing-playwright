@@ -87,7 +87,7 @@ class IPResolver:
             return ResolvedProxy(
                 hostname="none",
                 ip_address="",
-                timezone="America/New_York",
+                timezone="America/Los_Angeles",
                 resolution_method="no_proxy"
             )
         
@@ -276,7 +276,7 @@ class IPResolver:
             logger.debug(f"   Reverse DNS failed: {str(e)[:50]}")
         
         # Method 4: Default timezone (ultimate fallback)
-        default_timezone = "America/New_York"
+        default_timezone = "America/Los_Angeles"
         logger.warning(f"⚠️ Could not detect timezone for {ip_address}")
         logger.info(f"💡 Using default timezone: {default_timezone}")
         
