@@ -1,7 +1,8 @@
 """
-PATCHRIGHT RUNNER - BrowserForge Native WebRTC Implementation
+PATCHRIGHT RUNNER - BrowserForge Native WebRTC Implementation (CLEANED)
 
 Uses BrowserForge's intelligent WebRTC handling + Patchright's browser patches
+NO custom WebRTC blocking - all handled by BrowserForge
 """
 
 import logging
@@ -71,23 +72,15 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 else:
                     logger.info(f"📱 Using standard profile: {enhanced_config.get('device_name')}")
                 
-                # Patchright launch args with AGGRESSIVE WebRTC blocking
+                # CLEANED: Patchright launch args WITHOUT WebRTC disabling
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
                     args=[
                         '--no-sandbox',
                         '--disable-dev-shm-usage',
-                        
-                        # AGGRESSIVE WebRTC blocking at browser level
-                        '--disable-webrtc',
-                        '--disable-rtc-smoothness-algorithm',
-                        '--disable-webrtc-hw-decoding',
-                        '--disable-webrtc-hw-encoding',
-                        '--disable-webrtc-encryption',
-                        '--disable-webrtc-multiple-routes',
-                        '--enforce-webrtc-ip-permission-check',
-                        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+                        '--disable-blink-features=AutomationControlled',
+                        # ✅ NO WebRTC-disabling flags - let BrowserForge handle it!
                     ]
                 )
                 
@@ -169,7 +162,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
         """
         Apply Patchright stealth + BrowserForge native WebRTC protection
         
-        Combines Patchright's browser-level patches with BrowserForge's intelligent fingerprinting
+        CLEANED: No custom WebRTC blocking - BrowserForge handles everything
         """
         platform = enhanced_config.get("platform", "iPhone")
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
@@ -183,7 +176,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
         # Convert languages list to JavaScript array
         languages_str = str(languages).replace("'", '"')
         
-        # Get BrowserForge WebRTC script if enabled
+        # Get BrowserForge WebRTC script (includes all WebRTC handling)
         webrtc_script = ""
         if enhanced_config.get('_browserforge_webrtc_enabled'):
             webrtc_script = self.browserforge.get_browserforge_webrtc_script(enhanced_config)
