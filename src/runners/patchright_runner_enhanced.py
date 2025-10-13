@@ -1,9 +1,12 @@
 """
-PATCHRIGHT RUNNER - With IP Pre-Resolution + FIXED WebRTC + FIXED Geolocation
+PATCHRIGHT RUNNER - Complete with Advanced Stealth v4.0
 
-CRITICAL FIXES:
-1. WebRTC protection applied immediately after context creation
-2. Geolocation API uses coordinates from resolved proxy IP (not hardcoded)
+Includes:
+- Patchright's built-in browser patches
+- IP Pre-Resolution + Timezone Detection
+- Fixed WebRTC Protection
+- Fixed Geolocation API (coordinates from proxy)
+- Advanced Stealth (fixes fingerprint masking + automation detection)
 """
 
 import logging
@@ -13,16 +16,17 @@ from typing import Dict, Any
 
 from ..core.test_result import TestResult
 from .base_runner_enhanced import BaseRunner
+from .advanced_stealth import get_advanced_stealth_script
 
 logger = logging.getLogger(__name__)
 
 
 class PatchrightRunnerEnhanced(BaseRunner):
-    """Patchright runner with IP pre-resolution + FIXED WebRTC + FIXED Geolocation"""
+    """Patchright runner with comprehensive stealth protection"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("Patchright runner initialized (with IP pre-resolution + FIXED WebRTC + FIXED Geolocation)")
+        logger.info("Patchright runner initialized (Patches + IP Pre-Resolution + FIXED WebRTC + FIXED Geo + Advanced Stealth v4.0)")
     
     async def run_test(
         self,
@@ -32,9 +36,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Patchright + IP pre-resolution + FIXED WebRTC + FIXED Geolocation"""
+        """Run test with Patchright + Complete Stealth Protection"""
         start_time = time.time()
-        logger.info(f"🎭 Testing Patchright (IP Pre-Resolved + FIXED WebRTC + FIXED Geo) on {url_name}: {url}")
+        logger.info(f"🎭 Testing Patchright (Complete Stealth v4.0) on {url_name}: {url}")
         
         try:
             from patchright.async_api import async_playwright
@@ -52,7 +56,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
             )
         
         try:
-            # 🆕 STEP 1: Resolve proxy IP and timezone BEFORE browser launch
+            # ========================================================================
+            # STEP 1: Resolve proxy IP and timezone BEFORE browser launch
+            # ========================================================================
             logger.info("=" * 60)
             logger.info("STEP 1: Resolving proxy IP and timezone...")
             logger.info("=" * 60)
@@ -70,7 +76,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
             logger.info(f"   Method: {resolved_proxy.resolution_method}")
             logger.info(f"   Time: {resolved_proxy.resolution_time_ms:.1f}ms")
             
-            # 🆕 STEP 2: Get enhanced config with pre-resolved timezone
+            # ========================================================================
+            # STEP 2: Get enhanced config with pre-resolved timezone
+            # ========================================================================
             logger.info("=" * 60)
             logger.info("STEP 2: Creating browser config with correct timezone...")
             logger.info("=" * 60)
@@ -79,7 +87,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 mobile_config=mobile_config,
                 device_type="iphone_x",
                 use_browserforge=True,
-                resolved_proxy=resolved_proxy  # 🆕 Pass resolved proxy
+                resolved_proxy=resolved_proxy
             )
             
             logger.info(f"✅ Config created:")
@@ -89,7 +97,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
             logger.info(f"   BrowserForge: {enhanced_config.get('_browserforge_enhanced', False)}")
             logger.info(f"   Patchright Patches: Enabled")
             
-            # 🆕 STEP 3: Launch browser with CORRECT timezone from start
+            # ========================================================================
+            # STEP 3: Launch browser with CORRECT timezone from start
+            # ========================================================================
             logger.info("=" * 60)
             logger.info("STEP 3: Launching Patchright with correct timezone and geolocation...")
             logger.info("=" * 60)
@@ -97,7 +107,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
             async with async_playwright() as p:
                 proxy = self._build_proxy(proxy_config)
                 
-                # Patchright launch with patches
+                # Patchright launch with built-in patches
                 browser = await p.chromium.launch(
                     headless=True,
                     proxy=proxy,
@@ -108,7 +118,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                     ]
                 )
                 
-                # 🔥 CRITICAL FIX: Get coordinates from resolved proxy (not hardcoded!)
+                # Get coordinates from resolved proxy (not hardcoded!)
                 geo_lat = resolved_proxy.latitude if resolved_proxy.latitude else 34.0522342
                 geo_lon = resolved_proxy.longitude if resolved_proxy.longitude else -118.2436849
                 
@@ -118,7 +128,7 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 else:
                     logger.warning(f"   ⚠️ No coordinates from resolver, using fallback")
                 
-                # 🔥 CRITICAL FIX: Create context with CORRECT timezone AND coordinates
+                # Create context with CORRECT timezone AND coordinates
                 context = await browser.new_context(
                     user_agent=enhanced_config.get("user_agent"),
                     viewport=enhanced_config.get("viewport"),
@@ -126,9 +136,9 @@ class PatchrightRunnerEnhanced(BaseRunner):
                     is_mobile=True,
                     has_touch=True,
                     locale=enhanced_config.get("language", "en-US").replace("_", "-"),
-                    timezone_id=enhanced_config.get("timezone"),  # ✅ CORRECT from start!
+                    timezone_id=enhanced_config.get("timezone"),
                     permissions=['geolocation'],
-                    geolocation={"latitude": geo_lat, "longitude": geo_lon}  # ✅ MATCHES PROXY IP!
+                    geolocation={"latitude": geo_lat, "longitude": geo_lon}
                 )
                 
                 logger.info(f"✅ Browser context created:")
@@ -136,19 +146,22 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 logger.info(f"   Geolocation: {geo_lat:.4f}, {geo_lon:.4f}")
                 logger.info(f"   ✅ All location signals synchronized!")
                 
-                # 🔥 CRITICAL FIX: Apply WebRTC protection IMMEDIATELY after context creation
-                # This ensures the script runs BEFORE any page loads
-                logger.info("🔥 Applying FIXED WebRTC protection (blocks STUN/TURN)...")
-                await self._apply_browserforge_stealth(context, enhanced_config)
+                # ========================================================================
+                # STEP 3.5: Apply COMPREHENSIVE STEALTH v4.0
+                # ========================================================================
+                logger.info("🔥 Applying Comprehensive Stealth v4.0 (Patchright + Advanced)...")
+                await self._apply_comprehensive_stealth(context, enhanced_config)
                 
-                # 🔥 CRITICAL: Small delay to ensure script registration completes
+                # Small delay to ensure script registration completes
                 await asyncio.sleep(0.1)
                 
-                logger.info("✅ WebRTC protection active - STUN/TURN blocked")
+                logger.info("✅ Comprehensive Stealth v4.0 active")
                 
                 page = await context.new_page()
                 
-                # 🆕 STEP 4: Navigate and verify
+                # ========================================================================
+                # STEP 4: Navigate and verify
+                # ========================================================================
                 logger.info("=" * 60)
                 logger.info(f"STEP 4: Navigating to {url_name}...")
                 logger.info("=" * 60)
@@ -204,7 +217,8 @@ class PatchrightRunnerEnhanced(BaseRunner):
                         'pre_resolved_timezone': resolved_proxy.timezone,
                         'timezone_method': resolved_proxy.resolution_method,
                         'ip_match': (detected_ip == resolved_proxy.ip_address) if detected_ip else None,
-                        'webrtc_protection_v2': True,
+                        'webrtc_protection_v4': True,
+                        'advanced_stealth_v4': True,
                         'geolocation_latitude': geo_lat,
                         'geolocation_longitude': geo_lon,
                         'geolocation_from_proxy': (resolved_proxy.latitude is not None),
@@ -226,96 +240,75 @@ class PatchrightRunnerEnhanced(BaseRunner):
                 execution_time=execution_time
             )
     
-    async def _apply_browserforge_stealth(self, context, enhanced_config: Dict[str, Any]):
+    async def _apply_comprehensive_stealth(self, context, enhanced_config: Dict[str, Any]):
         """
-        🔥 FIXED: Apply Patchright stealth + COMPREHENSIVE WebRTC protection
+        🔥 COMPREHENSIVE STEALTH v4.0 for Patchright
         
-        This version:
-        - Combines Patchright browser patches
-        - Blocks ALL STUN/TURN servers
-        - Filters SDP candidates
-        - Prevents host/srflx/relay leaks
-        - Runs BEFORE page load
+        Combines FOUR protection layers:
+        1. Patchright's built-in browser patches (automatic)
+        2. BrowserForge fingerprint injection
+        3. Advanced stealth (fixes fingerprint masking + automation detection)
+        4. WebRTC protection (balanced proxy IP injection)
+        
+        This fixes:
+        - ✅ Fingerprint masking detection
+        - ✅ Automation framework detection
+        - ✅ Missing browser APIs
+        - ✅ Inconsistent properties
         """
         
+        # Extract config for Patchright-specific overrides
         platform = enhanced_config.get("platform", "iPhone")
         hardware_concurrency = enhanced_config.get('hardware_concurrency', 4)
         device_memory = enhanced_config.get('device_memory', 4)
         webgl_vendor = enhanced_config.get('webgl_vendor', 'Apple Inc.')
         webgl_renderer = enhanced_config.get('webgl_renderer', 'Apple GPU')
         language = enhanced_config.get('language', 'en-US')
-        languages = enhanced_config.get('languages', ['en-US', 'en'])
+        languages = str(enhanced_config.get('languages', ['en-US', 'en'])).replace("'", '"')
         max_touch_points = enhanced_config.get('max_touch_points', 5)
         
-        # Convert languages list to JavaScript array
-        languages_str = str(languages).replace("'", '"')
-        
-        # 🔥 CRITICAL: Get FIXED BrowserForge WebRTC script (blocks STUN)
-        webrtc_script = ""
-        if enhanced_config.get('_browserforge_webrtc_enabled'):
-            webrtc_script = self.browserforge.get_browserforge_webrtc_script(enhanced_config)
-        
-        # Patchright-specific overrides + BrowserForge
-        script = f"""
+        # Layer 1: Patchright-specific overrides (complement built-in patches)
+        patchright_overrides = f"""
 // ============================================================================
-// PATCHRIGHT ENHANCED - FIXED WEBRTC + GEOLOCATION v3.0
+// PATCHRIGHT OVERRIDES - Complement built-in patches
 // ============================================================================
 (function() {{
     'use strict';
     
-    console.log('[Patchright + BrowserForge] Applying stealth');
+    console.log('[Patchright] Applying enhanced overrides');
     
-    // Hide webdriver
-    Object.defineProperty(navigator, 'webdriver', {{
-        get: () => undefined,
-        configurable: true
-    }});
-    
-    // BrowserForge: Platform override
+    // Additional platform-specific properties
     Object.defineProperty(navigator, 'platform', {{
         get: () => '{platform}',
         configurable: true
     }});
     
-    // BrowserForge: Hardware concurrency
     Object.defineProperty(navigator, 'hardwareConcurrency', {{
         get: () => {hardware_concurrency},
         configurable: true
     }});
     
-    // BrowserForge: Device memory
     Object.defineProperty(navigator, 'deviceMemory', {{
         get: () => {device_memory},
         configurable: true
     }});
     
-    // BrowserForge: Max touch points
     Object.defineProperty(navigator, 'maxTouchPoints', {{
         get: () => {max_touch_points},
         configurable: true
     }});
     
-    // BrowserForge: Languages
     Object.defineProperty(navigator, 'language', {{
         get: () => '{language}',
         configurable: true
     }});
     
     Object.defineProperty(navigator, 'languages', {{
-        get: () => {languages_str},
+        get: () => {languages},
         configurable: true
     }});
     
-    // Chrome runtime
-    if (!window.chrome) {{
-        window.chrome = {{}};
-    }}
-    window.chrome.runtime = {{
-        connect: () => ({{}}),
-        sendMessage: () => ({{}})
-    }};
-    
-    // BrowserForge: WebGL fingerprint
+    // WebGL overrides
     const getParameter = WebGLRenderingContext.prototype.getParameter;
     WebGLRenderingContext.prototype.getParameter = function(parameter) {{
         if (parameter === 37445) return '{webgl_vendor}';
@@ -332,23 +325,82 @@ class PatchrightRunnerEnhanced(BaseRunner):
         }};
     }}
     
-    console.log('[Patchright + BrowserForge] ✅ Browser patches + fingerprint overrides applied');
+    console.log('[Patchright] Enhanced overrides applied');
 }})();
+"""
+        
+        # Layer 2: BrowserForge fingerprint injection
+        browserforge_script = self.browserforge.get_browserforge_injection_script(enhanced_config)
+        
+        # Layer 3: Advanced stealth (NEW - fixes automation + masking detection)
+        advanced_stealth = get_advanced_stealth_script(enhanced_config)
+        
+        # Layer 4: WebRTC protection (balanced)
+        webrtc_script = ""
+        if enhanced_config.get('_browserforge_webrtc_enabled'):
+            webrtc_script = self.browserforge.get_browserforge_webrtc_script(enhanced_config)
+        
+        # Combine all protection layers
+        combined_script = f"""
+// ============================================================================
+// COMPREHENSIVE STEALTH v4.0 for PATCHRIGHT - Four Protection Layers
+// ============================================================================
+
+console.log('[Stealth v4.0 - Patchright] Initializing comprehensive protection...');
+
+// LAYER 1: Patchright Enhanced Overrides
+// Complements Patchright's built-in browser patches
+{patchright_overrides}
+
+console.log('[Stealth v4.0] Layer 1 (Patchright Overrides) applied');
+
+// LAYER 2: BrowserForge Fingerprint Injection
+// Provides realistic hardware/software fingerprints
+{browserforge_script}
+
+console.log('[Stealth v4.0] Layer 2 (BrowserForge) applied');
+
+// LAYER 3: Advanced Stealth Protection
+// Fixes: Automation detection + Fingerprint masking detection
+{advanced_stealth}
+
+console.log('[Stealth v4.0] Layer 3 (Advanced Stealth) applied');
+
+// LAYER 4: WebRTC Protection (Balanced)
+// Injects proxy IP while allowing WebRTC to function
+{webrtc_script}
+
+console.log('[Stealth v4.0] Layer 4 (WebRTC Protection) applied');
 
 // ============================================================================
-// FIXED WEBRTC PROTECTION (Blocks STUN/TURN, filters all candidates)
+// Final Verification
 // ============================================================================
-{webrtc_script}
-        """
+console.log('[Stealth v4.0 - Patchright] ✅ ALL PROTECTION LAYERS ACTIVE');
+console.log('[Stealth v4.0] Status Check:');
+console.log('  - Patchright patches:', 'Built-in active');
+console.log('  - Automation artifacts removed:', typeof navigator.webdriver === 'undefined');
+console.log('  - Chrome runtime present:', !!window.chrome?.runtime);
+console.log('  - Platform:', navigator.platform);
+console.log('  - Touch points:', navigator.maxTouchPoints);
+console.log('  - WebGL vendor:', '{webgl_vendor}');
+"""
         
-        # 🔥 CRITICAL: Apply the combined script to the context
-        # This runs BEFORE any page loads
-        await context.add_init_script(script)
+        # Apply combined script to context (runs BEFORE any page loads)
+        await context.add_init_script(combined_script)
         
-        logger.info("✅ Patchright: Browser patches + BrowserForge stealth + WebRTC protection v3.0 BALANCED applied")
-        logger.info("   - Patchright anti-detection patches active")
-        logger.info("   - Proxy IP injection enabled")
-        logger.info("   - Private IP candidates blocked")
-        logger.info("   - Fake candidates with proxy IP injected")
-        logger.info("   - mDNS .local leaks prevented")
-        logger.info("   - Geolocation API synchronized with proxy location")
+        logger.info("✅ Comprehensive Stealth v4.0 applied to Patchright context")
+        logger.info("   🔧 Layer 1: Patchright enhanced overrides")
+        logger.info("   📦 Layer 2: BrowserForge fingerprint injection")
+        logger.info("   🛡️  Layer 3: Advanced stealth (automation + masking fixes)")
+        logger.info("   🌐 Layer 4: WebRTC protection (proxy IP injection)")
+        logger.info("   ")
+        logger.info("   Patchright advantages:")
+        logger.info("   ✅ Built-in browser patches (automatic)")
+        logger.info("   ✅ Enhanced automation detection evasion")
+        logger.info("   ")
+        logger.info("   Protection against:")
+        logger.info("   ✅ Fingerprint masking detection")
+        logger.info("   ✅ Automation framework detection")
+        logger.info("   ✅ WebRTC IP leaks")
+        logger.info("   ✅ Missing browser APIs")
+        logger.info("   ✅ Inconsistent navigator properties")
