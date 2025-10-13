@@ -160,8 +160,11 @@ def get_advanced_stealth_script(enhanced_config: Dict[str, Any]) -> str:
     }}
     
     // ========================================================================
-    // Fix Navigator Properties (Must be perfectly consistent)
+    // Fix Navigator Properties (ENHANCED - Perfect Consistency)
     // ========================================================================
+    
+    // Store all navigator property descriptors
+    const navigatorPropertyDescriptors = {{}};
     
     const navigatorProps = {{
         platform: config.platform,
@@ -178,61 +181,150 @@ def get_advanced_stealth_script(enhanced_config: Dict[str, Any]) -> str:
         appName: 'Netscape',
         appVersion: config.userAgent.substring(config.userAgent.indexOf('/') + 1),
         doNotTrack: null,
-        pdfViewerEnabled: !config.isIOS
+        pdfViewerEnabled: !config.isIOS,
+        cookieEnabled: true,
+        onLine: true
     }};
     
+    // Apply properties with tracking
     Object.keys(navigatorProps).forEach(prop => {{
         try {{
+            const value = navigatorProps[prop];
             Object.defineProperty(navigator, prop, {{
-                get: () => navigatorProps[prop],
+                get: () => value,
                 configurable: true,
                 enumerable: true
             }});
+            navigatorPropertyDescriptors[prop] = value;
         }} catch(e) {{
             console.debug(`[Stealth] Could not override navigator.${{prop}}`);
         }}
     }});
     
+    // CRITICAL: Override Object.getOwnPropertyDescriptor to hide modifications
+    const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+    Object.getOwnPropertyDescriptor = function(obj, prop) {{
+        if (obj === navigator && navigatorPropertyDescriptors.hasOwnProperty(prop)) {{
+            return {{
+                value: navigatorPropertyDescriptors[prop],
+                writable: false,
+                enumerable: true,
+                configurable: true
+            }};
+        }}
+        return originalGetOwnPropertyDescriptor(obj, prop);
+    }};
+    
     // ========================================================================
-    // Fix Plugins & MimeTypes (Important for Safari/iOS)
+    // Fix Plugins & MimeTypes (ENHANCED - Perfect iOS/Desktop matching)
     // ========================================================================
     
     if (config.isIOS) {{
-        // iOS Safari: empty plugins/mimeTypes
+        // iOS Safari: MUST have proper PluginArray/MimeTypeArray prototypes
+        const emptyPlugins = Object.create(PluginArray.prototype, {{
+            length: {{
+                get: () => 0,
+                enumerable: false,
+                configurable: true
+            }},
+            item: {{
+                value: function(index) {{ return null; }},
+                writable: false,
+                enumerable: true
+            }},
+            namedItem: {{
+                value: function(name) {{ return null; }},
+                writable: false,
+                enumerable: true
+            }},
+            refresh: {{
+                value: function() {{}},
+                writable: false,
+                enumerable: true
+            }}
+        }});
+        
         Object.defineProperty(navigator, 'plugins', {{
-            get: () => [],
-            configurable: true
+            get: () => emptyPlugins,
+            configurable: true,
+            enumerable: true
+        }});
+        
+        const emptyMimeTypes = Object.create(MimeTypeArray.prototype, {{
+            length: {{
+                get: () => 0,
+                enumerable: false,
+                configurable: true
+            }},
+            item: {{
+                value: function(index) {{ return null; }},
+                writable: false,
+                enumerable: true
+            }},
+            namedItem: {{
+                value: function(name) {{ return null; }},
+                writable: false,
+                enumerable: true
+            }}
         }});
         
         Object.defineProperty(navigator, 'mimeTypes', {{
-            get: () => [],
-            configurable: true
+            get: () => emptyMimeTypes,
+            configurable: true,
+            enumerable: true
         }});
+        
+        console.log('[Stealth] iOS plugins/mimeTypes: empty arrays with proper prototypes');
     }} else {{
-        // Desktop/Android Chrome: PDF plugin
+        // Desktop Chrome: PDF plugin with proper structure
+        const pdfMimeType = {{
+            type: 'application/pdf',
+            suffixes: 'pdf',
+            description: 'Portable Document Format',
+            enabledPlugin: null // Will be set below
+        }};
+        
         const pdfPlugin = {{
             name: 'PDF Viewer',
             description: 'Portable Document Format',
             filename: 'internal-pdf-viewer',
             length: 1,
-            item: (index) => null,
-            namedItem: (name) => null
+            0: pdfMimeType,
+            item: function(index) {{ return index === 0 ? this[0] : null; }},
+            namedItem: function(name) {{ return name === 'application/pdf' ? this[0] : null; }}
         }};
         
+        // Link mimeType back to plugin
+        pdfMimeType.enabledPlugin = pdfPlugin;
+        
+        const pluginsArray = Object.create(PluginArray.prototype, {{
+            length: {{ get: () => 1 }},
+            0: {{ value: pdfPlugin }},
+            item: {{ value: function(i) {{ return i === 0 ? pdfPlugin : null; }} }},
+            namedItem: {{ value: function(name) {{ return name === 'PDF Viewer' ? pdfPlugin : null; }} }},
+            refresh: {{ value: function() {{}} }}
+        }});
+        
+        const mimeTypesArray = Object.create(MimeTypeArray.prototype, {{
+            length: {{ get: () => 1 }},
+            0: {{ value: pdfMimeType }},
+            item: {{ value: function(i) {{ return i === 0 ? pdfMimeType : null; }} }},
+            namedItem: {{ value: function(name) {{ return name === 'application/pdf' ? pdfMimeType : null; }} }}
+        }});
+        
         Object.defineProperty(navigator, 'plugins', {{
-            get: () => [pdfPlugin],
-            configurable: true
+            get: () => pluginsArray,
+            configurable: true,
+            enumerable: true
         }});
         
         Object.defineProperty(navigator, 'mimeTypes', {{
-            get: () => [{{
-                type: 'application/pdf',
-                suffixes: 'pdf',
-                description: 'Portable Document Format',
-                enabledPlugin: pdfPlugin
-            }}],
-            configurable: true
+            get: () => mimeTypesArray,
+            configurable: true,
+            enumerable: true
         }});
+        
+        console.log('[Stealth] Desktop plugins/mimeTypes: PDF plugin with proper structure');
     }}
     
     // ========================================================================
@@ -554,6 +646,39 @@ def get_advanced_stealth_script(enhanced_config: Dict[str, Any]) -> str:
     }}
     
     // ========================================================================
+    // CRITICAL: Make all navigator property getters toString as [native code]
+    // ========================================================================
+    
+    const nativeProps = [
+        'userAgent', 'platform', 'vendor', 'hardwareConcurrency',
+        'deviceMemory', 'maxTouchPoints', 'language', 'languages',
+        'plugins', 'mimeTypes', 'cookieEnabled', 'onLine'
+    ];
+    
+    nativeProps.forEach(prop => {{
+        try {{
+            const descriptor = originalGetOwnPropertyDescriptor(navigator, prop);
+            if (descriptor && descriptor.get) {{
+                Object.defineProperty(descriptor.get, 'toString', {{
+                    value: () => 'function get() {{ [native code] }}',
+                    writable: false,
+                    configurable: true
+                }});
+                
+                Object.defineProperty(descriptor.get, 'name', {{
+                    value: 'get',
+                    writable: false,
+                    configurable: true
+                }});
+            }}
+        }} catch(e) {{
+            console.debug(`[Stealth] Could not fix toString for ${{prop}}`);
+        }}
+    }});
+    
+    console.log('[Stealth] Navigator property getters now return [native code]');
+    
+    // ========================================================================
     // Final Verification
     // ========================================================================
     
@@ -566,6 +691,13 @@ def get_advanced_stealth_script(enhanced_config: Dict[str, Any]) -> str:
     console.log('  - maxTouchPoints:', navigator.maxTouchPoints);
     console.log('  - webGL vendor:', config.webglVendor);
     console.log('  - plugins.length:', navigator.plugins.length);
+    console.log('  - vendor:', navigator.vendor);
+    
+    // Test native code appearance
+    const platformGetter = originalGetOwnPropertyDescriptor(navigator, 'platform');
+    if (platformGetter && platformGetter.get) {{
+        console.log('  - platform getter:', platformGetter.get.toString());
+    }}
     
 }})();
 """
