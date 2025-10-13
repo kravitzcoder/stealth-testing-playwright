@@ -1,9 +1,11 @@
 """
-PLAYWRIGHT RUNNER - With IP Pre-Resolution + FIXED WebRTC + FIXED Geolocation
+PLAYWRIGHT RUNNER - Complete with Advanced Stealth v4.0
 
-CRITICAL FIXES:
-1. WebRTC protection applied immediately after context creation
-2. Geolocation API uses coordinates from resolved proxy IP (not hardcoded)
+Includes:
+- IP Pre-Resolution + Timezone Detection
+- Fixed WebRTC Protection
+- Fixed Geolocation API (coordinates from proxy)
+- Advanced Stealth (fixes fingerprint masking + automation detection)
 """
 
 import logging
@@ -13,16 +15,17 @@ from typing import Dict, Any
 
 from ..core.test_result import TestResult
 from .base_runner_enhanced import BaseRunner
+from .advanced_stealth import get_advanced_stealth_script
 
 logger = logging.getLogger(__name__)
 
 
 class PlaywrightRunnerEnhanced(BaseRunner):
-    """Playwright runner with IP pre-resolution + FIXED WebRTC + FIXED Geolocation"""
+    """Playwright runner with comprehensive stealth protection"""
     
     def __init__(self, screenshot_engine=None):
         super().__init__(screenshot_engine)
-        logger.info("Playwright runner initialized (with IP pre-resolution + FIXED WebRTC + FIXED Geolocation)")
+        logger.info("Playwright runner initialized (IP Pre-Resolution + FIXED WebRTC + FIXED Geo + Advanced Stealth v4.0)")
     
     async def run_test(
         self,
@@ -32,9 +35,9 @@ class PlaywrightRunnerEnhanced(BaseRunner):
         mobile_config: Dict[str, Any],
         wait_time: int = 15
     ) -> TestResult:
-        """Run test with Playwright + IP pre-resolution + FIXED WebRTC + FIXED Geolocation"""
+        """Run test with Playwright + Complete Stealth Protection"""
         start_time = time.time()
-        logger.info(f"🎭 Testing Playwright (IP Pre-Resolved + FIXED WebRTC + FIXED Geo) on {url_name}: {url}")
+        logger.info(f"🎭 Testing Playwright (Complete Stealth v4.0) on {url_name}: {url}")
         
         try:
             from playwright.async_api import async_playwright
@@ -52,7 +55,9 @@ class PlaywrightRunnerEnhanced(BaseRunner):
             )
         
         try:
-            # 🆕 STEP 1: Resolve proxy IP and timezone BEFORE browser launch
+            # ========================================================================
+            # STEP 1: Resolve proxy IP and timezone BEFORE browser launch
+            # ========================================================================
             logger.info("=" * 60)
             logger.info("STEP 1: Resolving proxy IP and timezone...")
             logger.info("=" * 60)
@@ -70,7 +75,9 @@ class PlaywrightRunnerEnhanced(BaseRunner):
             logger.info(f"   Method: {resolved_proxy.resolution_method}")
             logger.info(f"   Time: {resolved_proxy.resolution_time_ms:.1f}ms")
             
-            # 🆕 STEP 2: Get enhanced config with pre-resolved timezone
+            # ========================================================================
+            # STEP 2: Get enhanced config with pre-resolved timezone
+            # ========================================================================
             logger.info("=" * 60)
             logger.info("STEP 2: Creating browser config with correct timezone...")
             logger.info("=" * 60)
@@ -79,7 +86,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 mobile_config=mobile_config,
                 device_type="iphone_x",
                 use_browserforge=True,
-                resolved_proxy=resolved_proxy  # 🆕 Pass resolved proxy
+                resolved_proxy=resolved_proxy
             )
             
             logger.info(f"✅ Config created:")
@@ -88,7 +95,9 @@ class PlaywrightRunnerEnhanced(BaseRunner):
             logger.info(f"   Timezone: {enhanced_config.get('timezone')} (✅ MATCHES PROXY IP)")
             logger.info(f"   BrowserForge: {enhanced_config.get('_browserforge_enhanced', False)}")
             
-            # 🆕 STEP 3: Launch browser with CORRECT timezone from start
+            # ========================================================================
+            # STEP 3: Launch browser with CORRECT timezone from start
+            # ========================================================================
             logger.info("=" * 60)
             logger.info("STEP 3: Launching browser with correct timezone and geolocation...")
             logger.info("=" * 60)
@@ -106,7 +115,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                     ]
                 )
                 
-                # 🔥 CRITICAL FIX: Get coordinates from resolved proxy (not hardcoded!)
+                # Get coordinates from resolved proxy (not hardcoded!)
                 geo_lat = resolved_proxy.latitude if resolved_proxy.latitude else 34.0522342
                 geo_lon = resolved_proxy.longitude if resolved_proxy.longitude else -118.2436849
                 
@@ -116,7 +125,7 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 else:
                     logger.warning(f"   ⚠️ No coordinates from resolver, using fallback")
                 
-                # 🔥 CRITICAL FIX: Create context with CORRECT timezone AND coordinates
+                # Create context with CORRECT timezone AND coordinates
                 context = await browser.new_context(
                     user_agent=enhanced_config.get("user_agent"),
                     viewport=enhanced_config.get("viewport"),
@@ -124,9 +133,9 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                     is_mobile=True,
                     has_touch=True,
                     locale=enhanced_config.get("language", "en-US").replace("_", "-"),
-                    timezone_id=enhanced_config.get("timezone"),  # ✅ CORRECT from start!
+                    timezone_id=enhanced_config.get("timezone"),
                     permissions=['geolocation'],
-                    geolocation={"latitude": geo_lat, "longitude": geo_lon}  # ✅ MATCHES PROXY IP!
+                    geolocation={"latitude": geo_lat, "longitude": geo_lon}
                 )
                 
                 logger.info(f"✅ Browser context created:")
@@ -134,19 +143,22 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 logger.info(f"   Geolocation: {geo_lat:.4f}, {geo_lon:.4f}")
                 logger.info(f"   ✅ All location signals synchronized!")
                 
-                # 🔥 CRITICAL FIX: Apply WebRTC protection IMMEDIATELY after context creation
-                # This ensures the script runs BEFORE any page loads
-                logger.info("🔥 Applying FIXED WebRTC protection (blocks STUN/TURN)...")
-                await self._apply_browserforge_stealth(context, enhanced_config)
+                # ========================================================================
+                # STEP 3.5: Apply COMPREHENSIVE STEALTH v4.0
+                # ========================================================================
+                logger.info("🔥 Applying Comprehensive Stealth v4.0...")
+                await self._apply_comprehensive_stealth(context, enhanced_config)
                 
-                # 🔥 CRITICAL: Small delay to ensure script registration completes
+                # Small delay to ensure script registration completes
                 await asyncio.sleep(0.1)
                 
-                logger.info("✅ WebRTC protection active - STUN/TURN blocked")
+                logger.info("✅ Comprehensive Stealth v4.0 active")
                 
                 page = await context.new_page()
                 
-                # 🆕 STEP 4: Navigate and verify
+                # ========================================================================
+                # STEP 4: Navigate and verify
+                # ========================================================================
                 logger.info("=" * 60)
                 logger.info(f"STEP 4: Navigating to {url_name}...")
                 logger.info("=" * 60)
@@ -201,7 +213,8 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                         'pre_resolved_timezone': resolved_proxy.timezone,
                         'timezone_method': resolved_proxy.resolution_method,
                         'ip_match': (detected_ip == resolved_proxy.ip_address) if detected_ip else None,
-                        'webrtc_protection_v2': True,
+                        'webrtc_protection_v4': True,
+                        'advanced_stealth_v4': True,
                         'geolocation_latitude': geo_lat,
                         'geolocation_longitude': geo_lon,
                         'geolocation_from_proxy': (resolved_proxy.latitude is not None),
@@ -223,100 +236,82 @@ class PlaywrightRunnerEnhanced(BaseRunner):
                 execution_time=execution_time
             )
     
-    async def _apply_browserforge_stealth(self, context, enhanced_config: Dict[str, Any]):
+    async def _apply_comprehensive_stealth(self, context, enhanced_config: Dict[str, Any]):
         """
-        🔥 FIXED: Apply BrowserForge stealth with COMPREHENSIVE WebRTC protection
+        🔥 COMPREHENSIVE STEALTH v4.0
         
-        This version:
-        - Blocks ALL STUN/TURN servers
-        - Filters SDP candidates
-        - Prevents host/srflx/relay leaks
-        - Runs BEFORE page load
+        Applies THREE protection layers:
+        1. BrowserForge fingerprint injection
+        2. Advanced stealth (fixes fingerprint masking + automation detection)
+        3. WebRTC protection (balanced proxy IP injection)
+        
+        This fixes:
+        - ✅ Fingerprint masking detection
+        - ✅ Automation framework detection
+        - ✅ Missing browser APIs
+        - ✅ Inconsistent properties
         """
         
-        # Get BrowserForge injection script (includes WebRTC masking)
+        # Layer 1: BrowserForge fingerprint injection
         browserforge_script = self.browserforge.get_browserforge_injection_script(enhanced_config)
         
-        # Additional stealth overrides
-        additional_script = f"""
-(function() {{
-    'use strict';
-    
-    console.log('[Playwright Enhanced] Applying stealth overrides');
-    
-    // Hide webdriver
-    if (navigator.webdriver) {{
-        Object.defineProperty(navigator, 'webdriver', {{
-            get: () => undefined,
-            configurable: true
-        }});
-    }}
-    
-    // Chrome runtime
-    if (!window.chrome) {{
-        window.chrome = {{}};
-    }}
-    if (!window.chrome.runtime) {{
-        window.chrome.runtime = {{
-            connect: () => ({{}}),
-            sendMessage: () => ({{}}),
-            id: undefined,
-            onMessage: {{
-                addListener: () => {{}}
-            }}
-        }};
-    }}
-    
-    // Permissions API override
-    if (navigator.permissions && navigator.permissions.query) {{
-        const originalQuery = navigator.permissions.query;
-        navigator.permissions.query = function(parameters) {{
-            if (parameters.name === 'notifications') {{
-                return Promise.resolve({{ state: 'default' }});
-            }}
-            return originalQuery.apply(this, arguments);
-        }};
-    }}
-    
-    // Battery API (mobile-like behavior)
-    if (navigator.getBattery) {{
-        navigator.getBattery = async () => ({{
-            charging: {str(enhanced_config.get('battery_charging', False)).lower()},
-            chargingTime: Infinity,
-            dischargingTime: 28800,
-            level: {enhanced_config.get('battery_level', 0.75)},
-            onchargingchange: null,
-            onchargingtimechange: null,
-            ondischargingtimechange: null,
-            onlevelchange: null
-        }});
-    }}
-    
-    console.log('[Playwright Enhanced] ✅ Stealth overrides applied');
-}})();
-"""
+        # Layer 2: Advanced stealth (NEW - fixes automation + masking detection)
+        advanced_stealth = get_advanced_stealth_script(enhanced_config)
         
-        # 🔥 CRITICAL: Combine BrowserForge injection with additional stealth
-        # WebRTC protection is now comprehensive and blocks STUN
+        # Layer 3: WebRTC protection (balanced)
+        webrtc_script = ""
+        if enhanced_config.get('_browserforge_webrtc_enabled'):
+            webrtc_script = self.browserforge.get_browserforge_webrtc_script(enhanced_config)
+        
+        # Combine all protection layers
         combined_script = f"""
 // ============================================================================
-// PLAYWRIGHT ENHANCED - FIXED WEBRTC + GEOLOCATION v3.0
+// COMPREHENSIVE STEALTH v4.0 - Three Protection Layers
 // ============================================================================
 
-// BrowserForge Injection (includes FIXED WebRTC masking with STUN blocking)
+console.log('[Stealth v4.0] Initializing comprehensive protection...');
+
+// LAYER 1: BrowserForge Fingerprint Injection
+// Provides realistic hardware/software fingerprints
 {browserforge_script}
 
-// Additional compatibility overrides
-{additional_script}
+console.log('[Stealth v4.0] Layer 1 (BrowserForge) applied');
+
+// LAYER 2: Advanced Stealth Protection
+// Fixes: Automation detection + Fingerprint masking detection
+{advanced_stealth}
+
+console.log('[Stealth v4.0] Layer 2 (Advanced Stealth) applied');
+
+// LAYER 3: WebRTC Protection (Balanced)
+// Injects proxy IP while allowing WebRTC to function
+{webrtc_script}
+
+console.log('[Stealth v4.0] Layer 3 (WebRTC Protection) applied');
+
+// ============================================================================
+// Final Verification
+// ============================================================================
+console.log('[Stealth v4.0] ✅ ALL PROTECTION LAYERS ACTIVE');
+console.log('[Stealth v4.0] Status Check:');
+console.log('  - Automation artifacts removed:', typeof navigator.webdriver === 'undefined');
+console.log('  - Chrome runtime present:', !!window.chrome?.runtime);
+console.log('  - Platform:', navigator.platform);
+console.log('  - Touch points:', navigator.maxTouchPoints);
+console.log('  - WebGL vendor:', '{enhanced_config.get("webgl_vendor", "N/A")}');
 """
         
-        # 🔥 CRITICAL: Apply the combined script to the context
-        # This runs BEFORE any page loads
+        # Apply combined script to context (runs BEFORE any page loads)
         await context.add_init_script(combined_script)
         
-        logger.info("✅ Playwright: BrowserForge stealth + WebRTC protection v3.0 BALANCED applied")
-        logger.info("   - Proxy IP injection enabled")
-        logger.info("   - Private IP candidates blocked")
-        logger.info("   - Fake candidates with proxy IP injected")
-        logger.info("   - mDNS .local leaks prevented")
-        logger.info("   - Geolocation API synchronized with proxy location")
+        logger.info("✅ Comprehensive Stealth v4.0 applied to browser context")
+        logger.info("   📦 Layer 1: BrowserForge fingerprint injection")
+        logger.info("   🛡️  Layer 2: Advanced stealth (automation + masking fixes)")
+        logger.info("   🌐 Layer 3: WebRTC protection (proxy IP injection)")
+        logger.info("   ")
+        logger.info("   Protection against:")
+        logger.info("   ✅ Fingerprint masking detection")
+        logger.info("   ✅ Automation framework detection")
+        logger.info("   ✅ WebRTC IP leaks")
+        logger.info("   ✅ Missing browser APIs")
+        logger.info("   ✅ Inconsistent navigator properties")
